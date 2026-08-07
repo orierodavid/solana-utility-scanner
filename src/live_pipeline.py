@@ -9,13 +9,14 @@ boundary: no utility, risk, catalyst, or thesis data is invented here.
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from typing import Protocol, Sequence
 
 from .collector import CollectedToken, LiveSolanaCollector
 from .models import RiskAssessment, UtilityEvidence
 from .notifier import Alert
-from .outcomes import AlertOutcomeRecord, NullOutcomeStore, OutcomeStore
+from .outcomes import AlertOutcomeRecord, JsonlOutcomeStore, OutcomeStore
 from .pipeline import DecisionAlertPipeline, PipelineResult
 from .wallet_intelligence import WalletIntelligenceEngine
 
@@ -87,7 +88,10 @@ class LiveScannerRunner:
         self.pipeline = pipeline or DecisionAlertPipeline()
         self.transport = transport
         self.wallet_engine = wallet_engine or WalletIntelligenceEngine()
-        self.outcome_store = outcome_store or NullOutcomeStore()
+        if outcome_store is None:
+            outcome_path = os.getenv("OUTCOME_STORE_PATH", "data/outcomes.jsonl")
+            outcome_store = JsonlOutcomeStore(outcome_path)
+        self.outcome_store = outcome_store
 
     def run_once(self) -> list[LiveRunResult]:
         """Collect candidates, evaluate them, persist outcomes, and optionally deliver alerts.
