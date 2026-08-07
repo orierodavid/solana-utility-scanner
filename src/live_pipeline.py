@@ -16,6 +16,7 @@ from .collector import CollectedToken, LiveSolanaCollector
 from .models import RiskAssessment, UtilityEvidence
 from .notifier import Alert
 from .pipeline import DecisionAlertPipeline, PipelineResult
+from .wallet_intelligence import WalletIntelligenceEngine
 
 
 logger = logging.getLogger("solana-utility-scanner.live")
@@ -57,6 +58,7 @@ class LiveRunResult:
     pipeline: PipelineResult | None
     notified: bool
     error: str | None = None
+    wallet_score: float | None = None
 
     @property
     def should_notify(self) -> bool:
@@ -72,6 +74,7 @@ class LiveScannerRunner:
         evidence_provider: EvidenceProvider | None = None,
         pipeline: DecisionAlertPipeline | None = None,
         transport: AlertTransport | None = None,
+        wallet_engine: WalletIntelligenceEngine | None = None,
     ) -> None:
         self.collector = collector or LiveSolanaCollector()
         if evidence_provider is None:
@@ -81,6 +84,7 @@ class LiveScannerRunner:
         self.evidence_provider = evidence_provider
         self.pipeline = pipeline or DecisionAlertPipeline()
         self.transport = transport
+        self.wallet_engine = wallet_engine or WalletIntelligenceEngine()
 
     def run_once(self) -> list[LiveRunResult]:
         """Collect candidates, evaluate them, and optionally deliver alerts.
@@ -95,14 +99,18 @@ class LiveScannerRunner:
             mint = candidate.token.address
             try:
                 evidence = self.evidence_provider.enrich(candidate)
+                wallet = self.wallet_engine.analyze(candidate)
+                wallet_context = wallet.summary
+                why_now = f"{evidence.why_now} {wallet_context}"
                 pipeline_result = self.pipeline.evaluate(
                     candidate.token,
                     evidence.utility,
                     evidence.risk,
                     catalyst_score=evidence.catalyst_score,
                     confidence=evidence.confidence,
-                    why_now=evidence.why_now,
+                    why_now=why_now,
                     invalidation_conditions=evidence.invalidation_conditions,
+                    wallet_intelligence_score=wallet.actionable_score,
                 )
 
                 notified = False
@@ -119,6 +127,7 @@ class LiveScannerRunner:
                         contract_address=mint,
                         pipeline=pipeline_result,
                         notified=notified,
+                        wallet_score=wallet.actionable_score,
                     )
                 )
             except Exception as exc:  # fail closed for one candidate, continue scan
