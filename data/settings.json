@@ -1,1 +1,20 @@
-
+{
+  "alert_score": 85,
+  "scan_interval": 300,
+  "market_cap": {
+    "minimum": 1000000,
+    "maximum": 20000000
+  },
+  "liquidity": {
+    "minimum": 250000
+  },
+  "volume": {
+    "minimum_24h": 500000
+  },
+  "holders": {
+    "minimum": 250
+  },
+  "confidence": {
+    "minimum": 85
+  }
+}
