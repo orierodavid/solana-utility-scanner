@@ -47,6 +47,7 @@ class TokenMarketData(BaseModel):
     buy_count_24h: Optional[int] = Field(default=None, ge=0)
     sell_count_24h: Optional[int] = Field(default=None, ge=0)
     volume_change_24h_pct: Optional[float] = None
+    price_change_24h_pct: Optional[float] = None
     token_age_hours: Optional[float] = Field(default=None, ge=0)
     top_holder_concentration_pct: Optional[float] = Field(default=None, ge=0, le=100)
     creator_holding_pct: Optional[float] = Field(default=None, ge=0, le=100)
