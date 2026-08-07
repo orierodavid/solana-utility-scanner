@@ -68,12 +68,16 @@ class LiveScannerRunner:
 
     def __init__(
         self,
-        collector: LiveSolanaCollector,
-        evidence_provider: EvidenceProvider,
+        collector: LiveSolanaCollector | None = None,
+        evidence_provider: EvidenceProvider | None = None,
         pipeline: DecisionAlertPipeline | None = None,
         transport: AlertTransport | None = None,
     ) -> None:
-        self.collector = collector
+        self.collector = collector or LiveSolanaCollector()
+        if evidence_provider is None:
+            from .evidence import LiveEvidenceProvider
+
+            evidence_provider = LiveEvidenceProvider()
         self.evidence_provider = evidence_provider
         self.pipeline = pipeline or DecisionAlertPipeline()
         self.transport = transport
