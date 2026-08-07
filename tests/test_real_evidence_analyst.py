@@ -145,5 +145,5 @@ def test_real_evidence_analyst_rejects_missing_project_website():
 def test_real_evidence_analyst_requires_recent_development():
     website = "<body>TEST token platform utility pay fees</body>"
     client = FakeEvidenceClient(website, "2020-01-01T12:00:00Z")
-    with pytest.raises(EvidenceFetchError, match="Utility evidence"):
+    with pytest.raises(EvidenceFetchError, match="Recent development"):
         RealEvidenceAnalyst(client).enrich(make_candidate())
