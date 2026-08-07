@@ -1,9 +1,8 @@
 """End-to-end live scanner orchestration.
 
-This module connects the read-only live collector to the deterministic
-validation/scoring/decision/alert pipeline and, when configured, the guarded
-Telegram transport. It is deliberately provider-neutral at the evidence
-boundary: no utility, risk, catalyst, or thesis data is invented here.
+The runner connects live collection to real evidence verification and then to
+the deterministic validation/scoring/decision/alert pipeline. Missing or
+unverified evidence fails closed before notification.
 """
 
 from __future__ import annotations
@@ -69,20 +68,27 @@ class LiveScannerRunner:
     def __init__(
         self,
         collector: LiveSolanaCollector,
-        evidence_provider: EvidenceProvider,
+        evidence_provider: EvidenceProvider | None = None,
         pipeline: DecisionAlertPipeline | None = None,
         transport: AlertTransport | None = None,
     ) -> None:
         self.collector = collector
+        if evidence_provider is None:
+            # Lazy import prevents an import cycle: analyst.py validates against
+            # CandidateEvidence from this module while the runner remains the
+            # public orchestration boundary.
+            from .analyst import RealEvidenceAnalyst
+
+            evidence_provider = RealEvidenceAnalyst()
         self.evidence_provider = evidence_provider
         self.pipeline = pipeline or DecisionAlertPipeline()
         self.transport = transport
 
     def run_once(self) -> list[LiveRunResult]:
-        """Collect candidates, evaluate them, and optionally deliver alerts.
+        """Collect candidates, verify evidence, evaluate them, and notify.
 
-        Any candidate whose evidence cannot be verified is fail-closed: it is
-        recorded as an error and cannot reach the notification transport.
+        Candidates with unavailable or unverifiable evidence are recorded as
+        skipped and can never reach the notification transport.
         """
         results: list[LiveRunResult] = []
         candidates: Sequence[CollectedToken] = self.collector.collect()
