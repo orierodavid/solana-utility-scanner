@@ -160,25 +160,30 @@ class GitHubEvidenceClient:
 
 
 def _extract_urls(profile: Mapping[str, Any]) -> list[str]:
+    """Extract project/documentation/GitHub URLs; social-only links are not evidence sources."""
     candidates: list[str] = []
     for key in ("url", "website"):
         value = profile.get(key)
         if isinstance(value, str):
             candidates.append(value)
-    for key in ("links", "websites", "socials"):
-        links = profile.get(key)
-        if isinstance(links, Sequence) and not isinstance(links, (str, bytes)):
-            for item in links:
-                if isinstance(item, Mapping) and isinstance(item.get("url"), str):
-                    candidates.append(item["url"])
+
+    links = profile.get("links")
+    if isinstance(links, Sequence) and not isinstance(links, (str, bytes)):
+        for item in links:
+            if not isinstance(item, Mapping) or not isinstance(item.get("url"), str):
+                continue
+            link_type = str(item.get("type") or item.get("label") or "").lower()
+            if any(term in link_type for term in ("website", "docs", "documentation", "github", "whitepaper")):
+                candidates.append(item["url"])
+
     info = profile.get("info")
     if isinstance(info, Mapping):
-        for key in ("websites", "socials"):
-            links = info.get(key)
-            if isinstance(links, Sequence) and not isinstance(links, (str, bytes)):
-                for item in links:
-                    if isinstance(item, Mapping) and isinstance(item.get("url"), str):
-                        candidates.append(item["url"])
+        websites = info.get("websites")
+        if isinstance(websites, Sequence) and not isinstance(websites, (str, bytes)):
+            for item in websites:
+                if isinstance(item, Mapping) and isinstance(item.get("url"), str):
+                    candidates.append(item["url"])
+
     result: list[str] = []
     seen: set[str] = set()
     for value in candidates:
@@ -351,7 +356,9 @@ class LiveEvidenceProvider:
             candidate,
             utility,
             risk,
-            catalyst_signals=((f"{catalyst_hits} catalyst/development signals found in source material"),) if catalyst_hits else (),
+            catalyst_signals=(
+                f"{catalyst_hits} catalyst/development signals found in source material",
+            ) if catalyst_hits else (),
         )
 
         invalidations = (
