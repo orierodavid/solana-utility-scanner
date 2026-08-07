@@ -127,14 +127,17 @@ class LiveScannerRunner:
                     notified = True
 
                 decision = pipeline_result.decision
+                if decision.breakdown is None:
+                    raise RuntimeError("Decision result did not contain a score breakdown")
+
                 record = AlertOutcomeRecord.from_decision(
                     event_id=mint + ":" + candidate.token.observed_at.isoformat(),
                     token=candidate.token,
                     decision=decision.decision,
-                    score=pipeline_result.decision.breakdown or self.pipeline.scoring_engine.score(candidate.token, evidence.utility, evidence.risk, catalyst_score=evidence.catalyst_score, wallet_intelligence_score=wallet.actionable_score).breakdown,
+                    score=decision.breakdown,
                     confidence=decision.confidence,
-                    risk_overall=pipeline_result.validation.risk.overall_risk,
-                    risk_hard_filter_failed=decision.decision.name == "NO_TRADE" and any("risk" in reason.lower() for reason in decision.reasons),
+                    risk_overall=evidence.risk.overall_risk,
+                    risk_hard_filter_failed=evidence.risk.hard_filter_failed,
                     why_now=why_now,
                     invalidation_conditions=evidence.invalidation_conditions,
                     wallet_intelligence_score=wallet.actionable_score,
