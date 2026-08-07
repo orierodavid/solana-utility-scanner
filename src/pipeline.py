@@ -54,12 +54,14 @@ class DecisionAlertPipeline:
         confidence: float | None = None,
         why_now: str,
         invalidation_conditions: list[str] | tuple[str, ...] = (),
+        wallet_intelligence_score: float | None = None,
     ) -> PipelineResult:
         """Evaluate one candidate and optionally create a qualified alert.
 
         ``confidence`` may be supplied by an upstream analyst. When omitted,
         the deterministic scoring engine's evidence-completeness confidence is
-        used. The alert channel is never reached for a failed hard filter.
+        used. Wallet intelligence is an evidence input to the existing
+        100-point community bucket; it never bypasses hard filters.
         """
         validation = self.validator.validate(token, utility)
         score_result = self.scoring_engine.score(
@@ -67,6 +69,7 @@ class DecisionAlertPipeline:
             utility,
             risk,
             catalyst_score=catalyst_score,
+            wallet_intelligence_score=wallet_intelligence_score,
         )
         effective_confidence = score_result.confidence if confidence is None else confidence
         decision = self.decision_engine.decide(
