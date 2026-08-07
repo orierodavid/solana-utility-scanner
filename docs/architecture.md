@@ -32,6 +32,8 @@ Real Evidence Verification
        ↓
 Utility / Development / Risk Analysis
        ↓
+Wallet Intelligence
+       ↓
 Market Structure Analysis
        ↓
 Momentum Analysis
@@ -53,7 +55,7 @@ Real evidence verification is mandatory for actionable live alerts. AI cannot cr
 
 ### Collector
 
-Collects current and historical market data from approved Solana data providers.
+Collects current market data from approved Solana data providers.
 
 Expected data includes:
 
@@ -68,7 +70,7 @@ Expected data includes:
 - Token age
 - Pool/pair information
 - Creator/deployer information where available
-- Wallet activity where available
+- Source-backed top-holder wallet snapshots
 - Project metadata and social links
 
 ### Validator
@@ -107,6 +109,25 @@ The current provider verifies:
 
 Evidence confidence is calculated from observed evidence. Missing evidence does not become a bullish assumption. Candidates without usable utility proof are rejected before alerting.
 
+### Wallet Intelligence Engine
+
+The wallet layer is deliberately conservative. A large holder is **not** automatically treated as smart money.
+
+The live collector captures source-backed top-holder wallet snapshots from the independent security provider. The wallet engine then measures:
+
+- Holder distribution quality
+- Repeated observation of the same wallets
+- Net ownership changes across repeated scans
+- Accumulation versus distribution
+- Wallet-intelligence confidence
+- Wallet concentration risks
+
+An append-only JSONL history stores recent observations by exact mint so repeated scans can detect changes in wallet ownership. The engine exposes a **smart-money proxy**, not a claim that a wallet is profitable or infallible.
+
+The wallet contribution is blended into the existing 10-point community bucket. It cannot bypass utility, security, market-cap, liquidity, or decision thresholds.
+
+When there is no repeated wallet history, the engine reports that limitation instead of inventing accumulation evidence.
+
 ### Analyst
 
 The analyst receives the verified evidence and produces a conservative thesis containing:
@@ -115,9 +136,10 @@ The analyst receives the verified evidence and produces a conservative thesis co
 2. Why the token qualifies as a utility token
 3. Why the setup is interesting now
 4. Evidence supporting the current setup
-5. Major risks
-6. Invalidation conditions
-7. Confidence in the evidence set
+5. Wallet-intelligence context where available
+6. Major risks
+7. Invalidation conditions
+8. Confidence in the evidence set
 
 The AI-facing analyst must preserve the exact contract address and must never invent missing data, URLs, catalysts, wallet activity, or risk findings.
 
@@ -136,8 +158,10 @@ The score considers multiple independent dimensions rather than market cap alone
 - Buy/sell pressure
 - Development activity
 - Catalysts / timing
-- Community quality
+- Community and wallet intelligence
 - Risk
+
+Wallet intelligence shares the existing 10-point community allocation so the total remains exactly 100 points.
 
 ### Decision Engine
 
@@ -214,13 +238,15 @@ Missing catalyst evidence contributes no bullish points.
 
 ### Wallet Intelligence
 
-Where reliable data is available:
+Wallet intelligence is evidence-driven rather than narrative-driven:
 
-- Accumulation by established wallets
-- Early-wallet selling
-- New-wallet participation
-- Concentration of purchases
-- Suspicious wallet relationships
+- Current top-holder structure
+- Repeated wallet presence
+- Net ownership accumulation/distribution
+- Concentration risk
+- Confidence based on observation depth
+
+The system does **not** call a wallet "smart money" solely because it is large. A stronger smart-money conclusion requires repeated, observable behavior and remains a proxy until historical outcomes are measured.
 
 ### Risk
 
@@ -267,6 +293,7 @@ Momentum:
 Holder Growth:
 Buy/Sell Pressure:
 Catalyst:
+Wallet Intelligence:
 
 Decision:
 
@@ -292,6 +319,7 @@ The engine must:
 - Preserve the exact source mint through every pipeline stage.
 - Fail closed when required evidence cannot be verified.
 - Never lower thresholds simply to reach the weekly alert target.
+- Never label a wallet as profitable or "smart money" without supporting historical evidence.
 
 ## 9. Future Learning Layer
 
@@ -303,5 +331,6 @@ Later versions can store historical alerts and outcomes to evaluate:
 - Maximum drawdown after alerts
 - Which catalysts produced the strongest moves
 - Which risk indicators were most useful
+- Whether wallet-intelligence signals actually improve outcomes
 
 The system should improve through measured historical performance rather than allowing the AI to change trading rules without evidence.
