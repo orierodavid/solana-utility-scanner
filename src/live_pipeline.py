@@ -15,6 +15,7 @@ from typing import Protocol, Sequence
 from .collector import CollectedToken, LiveSolanaCollector
 from .models import RiskAssessment, UtilityEvidence
 from .notifier import Alert
+from .outcomes import AlertOutcomeRecord, NullOutcomeStore, OutcomeStore
 from .pipeline import DecisionAlertPipeline, PipelineResult
 from .wallet_intelligence import WalletIntelligenceEngine
 
@@ -75,6 +76,7 @@ class LiveScannerRunner:
         pipeline: DecisionAlertPipeline | None = None,
         transport: AlertTransport | None = None,
         wallet_engine: WalletIntelligenceEngine | None = None,
+        outcome_store: OutcomeStore | None = None,
     ) -> None:
         self.collector = collector or LiveSolanaCollector()
         if evidence_provider is None:
@@ -85,12 +87,15 @@ class LiveScannerRunner:
         self.pipeline = pipeline or DecisionAlertPipeline()
         self.transport = transport
         self.wallet_engine = wallet_engine or WalletIntelligenceEngine()
+        self.outcome_store = outcome_store or NullOutcomeStore()
 
     def run_once(self) -> list[LiveRunResult]:
-        """Collect candidates, evaluate them, and optionally deliver alerts.
+        """Collect candidates, evaluate them, persist outcomes, and optionally deliver alerts.
 
         Any candidate whose evidence cannot be verified is fail-closed: it is
         recorded as an error and cannot reach the notification transport.
+        Historical persistence is observational only and never changes the
+        decision or alert result.
         """
         results: list[LiveRunResult] = []
         candidates: Sequence[CollectedToken] = self.collector.collect()
@@ -121,6 +126,23 @@ class LiveScannerRunner:
                     )
                     self.transport.send(alert)
                     notified = True
+
+                decision = pipeline_result.decision
+                record = AlertOutcomeRecord.from_decision(
+                    event_id=mint + ":" + candidate.token.observed_at.isoformat(),
+                    token=candidate.token,
+                    decision=decision.decision,
+                    score=pipeline_result.decision.score,
+                    confidence=decision.confidence,
+                    risk_overall=decision.risk.overall_risk,
+                    risk_hard_filter_failed=decision.risk.hard_filter_failed,
+                    why_now=why_now,
+                    invalidation_conditions=evidence.invalidation_conditions,
+                    wallet_intelligence_score=wallet.actionable_score,
+                    notified=notified,
+                    observed_at=candidate.token.observed_at,
+                )
+                self.outcome_store.append(record)
 
                 results.append(
                     LiveRunResult(
