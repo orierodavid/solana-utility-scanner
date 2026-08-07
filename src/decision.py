@@ -14,6 +14,7 @@ class DecisionResult:
     score: float
     confidence: float
     reasons: tuple[str, ...]
+    breakdown: ScoreBreakdown | None = None
 
     @property
     def actionable(self) -> bool:
@@ -48,30 +49,30 @@ class DecisionEngine:
 
         if not validation.passed:
             reasons.extend(validation.reasons)
-            return DecisionResult(Decision.NO_TRADE, score.total, confidence, tuple(reasons))
+            return DecisionResult(Decision.NO_TRADE, score.total, confidence, tuple(reasons), score)
 
         if token.market_cap_zone is MarketCapZone.OUTSIDE:
             reasons.append("Market cap is outside the discovery range")
-            return DecisionResult(Decision.NO_TRADE, score.total, confidence, tuple(reasons))
+            return DecisionResult(Decision.NO_TRADE, score.total, confidence, tuple(reasons), score)
 
         if not utility.verified:
             reasons.append("Utility verification failed")
-            return DecisionResult(Decision.NO_TRADE, score.total, confidence, tuple(reasons))
+            return DecisionResult(Decision.NO_TRADE, score.total, confidence, tuple(reasons), score)
 
         if risk.hard_filter_failed:
             reasons.extend(risk.reasons or ["Hard risk filter failed"])
-            return DecisionResult(Decision.NO_TRADE, score.total, confidence, tuple(reasons))
+            return DecisionResult(Decision.NO_TRADE, score.total, confidence, tuple(reasons), score)
 
         if score.total >= self.buy_score and confidence >= self.buy_confidence:
             reasons.append("Score and confidence both meet actionable thresholds")
-            return DecisionResult(Decision.BUY_CANDIDATE, score.total, confidence, tuple(reasons))
+            return DecisionResult(Decision.BUY_CANDIDATE, score.total, confidence, tuple(reasons), score)
 
         if score.total >= self.wait_score:
             if score.total < self.buy_score:
                 reasons.append(f"Score {score.total:.2f} is below buy threshold {self.buy_score:.2f}")
             if confidence < self.buy_confidence:
                 reasons.append(f"Confidence {confidence:.2f} is below buy threshold {self.buy_confidence:.2f}")
-            return DecisionResult(Decision.WAIT, score.total, confidence, tuple(reasons))
+            return DecisionResult(Decision.WAIT, score.total, confidence, tuple(reasons), score)
 
         reasons.append(f"Score {score.total:.2f} is below wait threshold {self.wait_score:.2f}")
-        return DecisionResult(Decision.NO_TRADE, score.total, confidence, tuple(reasons))
+        return DecisionResult(Decision.NO_TRADE, score.total, confidence, tuple(reasons), score)
