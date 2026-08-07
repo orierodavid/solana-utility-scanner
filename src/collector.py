@@ -48,6 +48,15 @@ class CollectorConfig:
 
 
 @dataclass(frozen=True)
+class HolderSnapshot:
+    """A source-backed wallet holding percentage at collection time."""
+
+    address: str
+    ownership_pct: float
+    source: str = "rugcheck"
+
+
+@dataclass(frozen=True)
 class SecurityData:
     """Security fields collected independently from market data."""
 
@@ -58,6 +67,7 @@ class SecurityData:
     risk_score: float | None
     risk_level: str | None
     raw: Mapping[str, Any]
+    top_holders: tuple[HolderSnapshot, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -126,6 +136,16 @@ class RugCheckClient:
 
         top_holders = payload.get("topHolders") or []
         holder_pcts = [float(h["pct"]) for h in top_holders if isinstance(h, dict) and h.get("pct") is not None]
+        holder_snapshots = tuple(
+            HolderSnapshot(
+                address=str(item.get("address") or item.get("owner") or ""),
+                ownership_pct=float(item.get("pct")),
+            )
+            for item in top_holders
+            if isinstance(item, dict)
+            and (item.get("address") or item.get("owner"))
+            and item.get("pct") is not None
+        )
         holders = payload.get("totalHolders") or payload.get("holders")
         if holders is not None:
             try:
@@ -151,6 +171,7 @@ class RugCheckClient:
             risk_score=risk_score,
             risk_level=str(payload.get("riskLevel")) if payload.get("riskLevel") is not None else None,
             raw={"risks": risks, "mint": payload.get("mint"), "report": payload},
+            top_holders=holder_snapshots,
         )
 
 
@@ -238,8 +259,6 @@ class LiveSolanaCollector:
 
     def collect(self) -> list[CollectedToken]:
         raw_profiles = self.dex.latest_solana_profiles()
-        # Enforce the Solana-chain invariant at the collector boundary as well.
-        # This protects the scanner if an adapter/mock returns mixed-chain data.
         profiles = [
             profile
             for profile in raw_profiles
