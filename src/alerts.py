@@ -60,6 +60,8 @@ class AlertBuilder:
             raise ValueError("Hard risk filters must pass before alerting")
         if token.market_cap_zone.value == "OUTSIDE":
             raise ValueError("Token is outside the configured market-cap range")
+        if result.breakdown is None:
+            raise ValueError("Score breakdown is required to build an alert")
 
         buys = token.buy_count_24h or 0
         sells = token.sell_count_24h or 0
@@ -71,9 +73,11 @@ class AlertBuilder:
             if token.holder_growth_24h_pct is not None
             else "Unavailable"
         )
-        catalyst = result.score_result.breakdown.catalysts
+        catalyst = result.breakdown.catalysts
         risks = risk.reasons or ["No hard risk-filter failures"]
-        invalidation = list(invalidation_conditions) or ["Required setup evidence deteriorates or a mandatory risk filter fails"]
+        invalidation = list(invalidation_conditions) or [
+            "Required setup evidence deteriorates or a mandatory risk filter fails"
+        ]
 
         text = "\n".join(
             [
@@ -90,7 +94,7 @@ class AlertBuilder:
                 f"Risk Level: {self._risk_level(risk)}",
                 f"Confidence: {result.confidence:.2f}%",
                 "",
-                f"Momentum: {result.score_result.breakdown.momentum:.2f}/20",
+                f"Momentum: {result.breakdown.momentum:.2f}/20",
                 f"Holder Growth: {holder_growth}",
                 f"Buy/Sell Pressure: {buy_pressure_text}",
                 f"Catalyst Score: {catalyst:.2f}/10",
