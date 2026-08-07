@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-from dataclasses import asdict
 
 from .collector import CollectorConfig, CollectorError, LiveSolanaCollector
 
@@ -36,10 +35,13 @@ def build_collector() -> LiveSolanaCollector:
 
 def run_once() -> list[dict[str, object]]:
     """Run one read-only live scan and return JSON-safe candidate records."""
-    collector = build_collector()
-    collected = collector.collect()
+    collected = build_collector().collect()
     records: list[dict[str, object]] = []
     for item in collected:
+        buys = item.token.buy_count_24h or 0
+        sells = item.token.sell_count_24h or 0
+        total_trades = buys + sells
+        buy_pressure_pct = (buys / total_trades * 100) if total_trades else None
         records.append(
             {
                 "contract_address": item.token.address,
@@ -50,6 +52,10 @@ def run_once() -> list[dict[str, object]]:
                 "liquidity_usd": item.token.liquidity_usd,
                 "volume_24h_usd": item.token.volume_24h_usd,
                 "price_usd": item.token.price_usd,
+                "price_change_24h_pct": item.token.price_change_24h_pct,
+                "buy_count_24h": item.token.buy_count_24h,
+                "sell_count_24h": item.token.sell_count_24h,
+                "buy_pressure_pct": buy_pressure_pct,
                 "holders": item.token.holders,
                 "top_holder_concentration_pct": item.token.top_holder_concentration_pct,
                 "mint_authority_active": item.token.mint_authority_active,
