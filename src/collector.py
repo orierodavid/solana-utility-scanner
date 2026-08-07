@@ -237,11 +237,20 @@ class LiveSolanaCollector:
         self.rugcheck = rugcheck or RugCheckClient(timeout=self.config.request_timeout_seconds)
 
     def collect(self) -> list[CollectedToken]:
-        profiles = self.dex.latest_solana_profiles()[: self.config.max_profile_tokens]
-        mints = list(dict.fromkeys(str(p.get("tokenAddress")) for p in profiles if p.get("tokenAddress")))
+        raw_profiles = self.dex.latest_solana_profiles()
+        # Enforce the Solana-chain invariant at the collector boundary as well.
+        # This protects the scanner if an adapter/mock returns mixed-chain data.
+        profiles = [
+            profile
+            for profile in raw_profiles
+            if isinstance(profile, Mapping)
+            and profile.get("chainId") == SOLANA_CHAIN
+            and profile.get("tokenAddress")
+        ][: self.config.max_profile_tokens]
+        mints = list(dict.fromkeys(str(p["tokenAddress"]) for p in profiles))
         pairs = self.dex.token_pairs(mints)
         observed_at = datetime.now(timezone.utc)
-        profile_by_mint = {str(p["tokenAddress"]): p for p in profiles if p.get("tokenAddress")}
+        profile_by_mint = {str(p["tokenAddress"]): p for p in profiles}
         results: list[CollectedToken] = []
 
         for mint in mints:
