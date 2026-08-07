@@ -217,7 +217,7 @@ def _token_from_pair(pair: Mapping[str, Any], mint: str, observed_at: datetime) 
         price_usd=price_usd,
         buy_count_24h=buy_count,
         sell_count_24h=sell_count,
-        volume_change_24h_pct=number(changes.get("h24"), 0.0) if changes.get("h24") is not None else None,
+        price_change_24h_pct=number(changes.get("h24")) if changes.get("h24") is not None else None,
         token_age_hours=token_age_hours,
         observed_at=observed_at,
     )
