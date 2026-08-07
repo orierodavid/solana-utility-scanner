@@ -41,7 +41,7 @@ class ScoringEngine:
       momentum         20
       development      15
       catalysts        10
-      community        10
+      community        10 (holder/community structure plus wallet intelligence)
       risk             10
 
     Unknown values receive no points. This is intentional: the engine must
@@ -55,9 +55,12 @@ class ScoringEngine:
         risk: RiskAssessment,
         *,
         catalyst_score: float = 0.0,
+        wallet_intelligence_score: float | None = None,
     ) -> ScoreResult:
         if not 0.0 <= catalyst_score <= 10.0:
             raise ValueError("catalyst_score must be between 0 and 10")
+        if wallet_intelligence_score is not None and not 0.0 <= wallet_intelligence_score <= 10.0:
+            raise ValueError("wallet_intelligence_score must be between 0 and 10")
 
         breakdown = ScoreBreakdown(
             utility=self._utility_score(utility),
@@ -65,11 +68,11 @@ class ScoringEngine:
             momentum=self._momentum_score(token),
             development=self._development_score(utility),
             catalysts=catalyst_score,
-            community=self._community_score(token),
+            community=self._community_score(token, wallet_intelligence_score),
             risk=self._risk_score(risk),
         )
 
-        confidence = self._confidence(token, utility, risk)
+        confidence = self._confidence(token, utility, risk, wallet_intelligence_score)
         if token.market_cap_zone.value == "OUTSIDE" or risk.hard_filter_failed or not utility.verified:
             decision = Decision.NO_TRADE
         elif breakdown.total >= BUY_THRESHOLD and confidence >= BUY_THRESHOLD:
@@ -97,11 +100,6 @@ class ScoringEngine:
 
     @staticmethod
     def _market_structure_score(token: TokenMarketData) -> float:
-        # Market cap defines the scanner's opportunity universe. Tokens outside
-        # $50k-$150k must receive zero market-structure points, not merely be
-        # blocked at the final decision stage. This keeps the score itself
-        # faithful to the hard gate and prevents an out-of-range token from
-        # accumulating partial points from liquidity or volume.
         if token.market_cap_zone.value == "OUTSIDE":
             return 0.0
 
@@ -183,43 +181,50 @@ class ScoringEngine:
         return round(min(score, 15.0), 2)
 
     @staticmethod
-    def _community_score(token: TokenMarketData) -> float:
-        score = 0.0
+    def _community_score(token: TokenMarketData, wallet_intelligence_score: float | None = None) -> float:
+        base = 0.0
         holders = token.holders
         if holders is not None:
             if holders >= 1000:
-                score += 5.0
+                base += 5.0
             elif holders >= 500:
-                score += 4.0
+                base += 4.0
             elif holders >= 250:
-                score += 3.0
+                base += 3.0
             elif holders >= 100:
-                score += 2.0
+                base += 2.0
             elif holders > 0:
-                score += 1.0
+                base += 1.0
 
         growth = token.holder_growth_24h_pct
         if growth is not None:
             if growth >= 20:
-                score += 3.0
+                base += 3.0
             elif growth >= 10:
-                score += 2.0
+                base += 2.0
             elif growth > 0:
-                score += 1.0
+                base += 1.0
 
         concentration = token.top_holder_concentration_pct
         if concentration is not None:
             if concentration <= 20:
-                score += 2.0
+                base += 2.0
             elif concentration <= 30:
-                score += 1.0
+                base += 1.0
 
-        return round(min(score, 10.0), 2)
+        base = min(base, 10.0)
+        if wallet_intelligence_score is None:
+            return round(base, 2)
+
+        # Wallet intelligence is deliberately blended into the existing
+        # 10-point community bucket, rather than creating points out of thin
+        # air. This keeps the total score exactly 100 points.
+        wallet_component = max(0.0, min(wallet_intelligence_score, 10.0))
+        blended = base * 0.4 + wallet_component * 0.6
+        return round(min(blended, 10.0), 2)
 
     @staticmethod
     def _risk_score(risk: RiskAssessment) -> float:
-        # RiskAssessment is a 0-100 risk scale; opportunity scoring rewards
-        # the inverse while preserving a strict 10-point ceiling.
         return round(max(0.0, 10.0 - risk.overall_risk / 10.0), 2)
 
     @staticmethod
@@ -227,6 +232,7 @@ class ScoringEngine:
         token: TokenMarketData,
         utility: UtilityEvidence,
         risk: RiskAssessment,
+        wallet_intelligence_score: float | None = None,
     ) -> float:
         """Estimate evidence completeness, not probability of profit."""
         checks = [
@@ -245,4 +251,6 @@ class ScoringEngine:
             utility.active_development,
             not risk.hard_filter_failed,
         ]
+        if wallet_intelligence_score is not None:
+            checks.append(wallet_intelligence_score >= 0)
         return round(sum(checks) / len(checks) * 100, 2)
