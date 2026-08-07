@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
+import re
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
+_SOLANA_BASE58 = re.compile(r"^[1-9A-HJ-NP-Za-km-z]+$")
 
 
 class Decision(str, Enum):
@@ -22,7 +26,11 @@ class MarketCapZone(str, Enum):
 
 
 class TokenMarketData(BaseModel):
-    """Observed/collected data for one Solana token."""
+    """Observed/collected data for one Solana token.
+
+    ``address`` is the exact Solana token mint address supplied by the data
+    collector. It must never be inferred from a token symbol or name.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -45,6 +53,16 @@ class TokenMarketData(BaseModel):
     mint_authority_active: Optional[bool] = None
     freeze_authority_active: Optional[bool] = None
     observed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @field_validator("address")
+    @classmethod
+    def validate_solana_mint_address(cls, value: str) -> str:
+        # Solana addresses are Base58 strings and are normally 32 bytes,
+        # represented as 32–44 Base58 characters. We intentionally do not
+        # accept whitespace, symbols, URLs, or token tickers.
+        if not _SOLANA_BASE58.fullmatch(value):
+            raise ValueError("address must be a valid-looking Solana Base58 mint address")
+        return value
 
     @field_validator("chain")
     @classmethod
@@ -134,6 +152,11 @@ class TokenAnalysis(BaseModel):
     why_now: str = Field(min_length=1)
     invalidation_conditions: list[str] = Field(default_factory=list)
     decision: Decision = Decision.NO_TRADE
+
+    @property
+    def contract_address(self) -> str:
+        """Exact verified mint address to be included in every alert."""
+        return self.token.address
 
     @model_validator(mode="after")
     def enforce_decision_rules(self) -> "TokenAnalysis":
