@@ -1,10 +1,11 @@
-"""Structured AI analysis layer for validated Solana utility-token candidates."""
+"""Structured AI analysis and evidence synthesis for Solana candidates."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
+from .collector import CollectedToken
 from .models import RiskAssessment, ScoreBreakdown, TokenMarketData, UtilityEvidence
 
 
@@ -75,3 +76,57 @@ class Analyst:
         if not isinstance(response["why_now"], str) or not response["why_now"].strip():
             raise ValueError("AI why_now must be a non-empty string")
         return dict(response)
+
+
+@dataclass(frozen=True)
+class AnalystFinding:
+    """Conservative thesis synthesized only from measured evidence."""
+
+    thesis: str
+    risks: tuple[str, ...]
+    catalysts: tuple[str, ...]
+    confidence: float
+
+
+class EvidenceAnalyst:
+    """Turn source-backed evidence into a conservative live-scanner thesis."""
+
+    def analyze(
+        self,
+        candidate: CollectedToken,
+        utility: UtilityEvidence,
+        risk: RiskAssessment,
+        *,
+        catalyst_signals: Sequence[str] = (),
+    ) -> AnalystFinding:
+        token = candidate.token
+        thesis_parts = [
+            f"{token.symbol} is inside the configured {token.market_cap_zone.value.lower()} market-cap zone at ${token.market_cap_usd:,.0f}.",
+            f"Liquidity is ${token.liquidity_usd:,.0f} and 24h volume is ${token.volume_24h_usd:,.0f}.",
+        ]
+        if utility.verified:
+            thesis_parts.append("Utility is supported by source-backed project evidence.")
+        if token.holder_growth_24h_pct is not None and token.holder_growth_24h_pct > 0:
+            thesis_parts.append(f"Holder growth is positive at {token.holder_growth_24h_pct:+.1f}% over 24h.")
+        if token.buy_count_24h is not None and token.sell_count_24h is not None:
+            total = token.buy_count_24h + token.sell_count_24h
+            if total:
+                pressure = token.buy_count_24h / total * 100
+                thesis_parts.append(f"Observed buy pressure is {pressure:.1f}%.")
+
+        risks = list(risk.reasons)
+        if token.mint_authority_active:
+            risks.append("Mint authority is active.")
+        if token.freeze_authority_active:
+            risks.append("Freeze authority is active.")
+        if not risks:
+            risks.append("No material risk finding was produced by the current evidence set.")
+
+        catalysts = tuple(dict.fromkeys(catalyst_signals))
+        confidence = max(0.0, 100.0 - min(50.0, len(risks) * 8.0))
+        return AnalystFinding(
+            thesis=" ".join(thesis_parts),
+            risks=tuple(dict.fromkeys(risks)),
+            catalysts=catalysts,
+            confidence=confidence,
+        )
