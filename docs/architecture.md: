@@ -1,1 +1,124 @@
+# Solana Utility Scanner - System Architecture
 
+## Overview
+
+The Solana Utility Scanner is an AI-powered market intelligence engine that identifies high-quality Solana utility tokens for short-term trading opportunities.
+
+The system is modular, allowing each component to evolve independently.
+
+---
+
+## System Flow
+
+```
+Scheduler
+    ↓
+Collector
+    ↓
+Validator
+    ↓
+Scorer
+    ↓
+AI Analyst
+    ↓
+Decision Engine
+    ↓
+Notifier
+```
+
+---
+
+## Components
+
+### 1. Scheduler
+Runs automatically every configured interval.
+
+Responsibilities:
+- Trigger market scans.
+- Manage execution timing.
+
+---
+
+### 2. Collector
+
+Collects:
+
+- New Solana utility tokens
+- Market Cap
+- Liquidity
+- Trading Volume
+- Holder Count
+- Token Age
+- Social Links
+
+---
+
+### 3. Validator
+
+Rejects projects that fail mandatory rules.
+
+Examples:
+
+- Suspicious ownership
+- Extremely low liquidity
+- Missing utility
+- Scam indicators
+
+---
+
+### 4. Scorer
+
+Calculates the Alpha Score.
+
+Scoring Categories include:
+
+- Utility
+- Liquidity
+- Volume
+- Market Cap
+- Momentum
+- Holder Growth
+- Catalysts
+- Risk
+
+---
+
+### 5. AI Analyst
+
+Produces:
+
+- Why Now
+- Key Strengths
+- Risks
+- Market Summary
+- Confidence Score
+
+---
+
+### 6. Decision Engine
+
+Possible outputs:
+
+- Trade Candidate
+- Wait for Confirmation
+- No Trade
+
+---
+
+### 7. Notifier
+
+Delivers alerts through:
+
+- Telegram
+- WhatsApp (future)
+- Email (future)
+
+---
+
+## Guiding Principles
+
+- Evidence over hype
+- Utility before speculation
+- Multiple confirmations before alerts
+- Configurable thresholds
+- Modular architecture
