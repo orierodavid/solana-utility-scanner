@@ -105,8 +105,7 @@ class LiveScannerRunner:
             try:
                 evidence = self.evidence_provider.enrich(candidate)
                 wallet = self.wallet_engine.analyze(candidate)
-                wallet_context = wallet.summary
-                why_now = f"{evidence.why_now} {wallet_context}"
+                why_now = f"{evidence.why_now} {wallet.summary}"
                 pipeline_result = self.pipeline.evaluate(
                     candidate.token,
                     evidence.utility,
@@ -132,10 +131,10 @@ class LiveScannerRunner:
                     event_id=mint + ":" + candidate.token.observed_at.isoformat(),
                     token=candidate.token,
                     decision=decision.decision,
-                    score=pipeline_result.decision.score,
+                    score=pipeline_result.decision.breakdown or self.pipeline.scoring_engine.score(candidate.token, evidence.utility, evidence.risk, catalyst_score=evidence.catalyst_score, wallet_intelligence_score=wallet.actionable_score).breakdown,
                     confidence=decision.confidence,
-                    risk_overall=decision.risk.overall_risk,
-                    risk_hard_filter_failed=decision.risk.hard_filter_failed,
+                    risk_overall=pipeline_result.validation.risk.overall_risk,
+                    risk_hard_filter_failed=decision.decision.name == "NO_TRADE" and any("risk" in reason.lower() for reason in decision.reasons),
                     why_now=why_now,
                     invalidation_conditions=evidence.invalidation_conditions,
                     wallet_intelligence_score=wallet.actionable_score,
