@@ -1,20 +1,38 @@
 {
   "alert_score": 85,
+  "priority_score": 95,
   "scan_interval": 300,
+  "alert_target": {
+    "minimum_per_week": 1,
+    "maximum_per_week": 9
+  },
   "market_cap": {
-    "minimum": 1000000,
-    "maximum": 20000000
+    "primary_minimum": 50000,
+    "primary_maximum": 100000,
+    "secondary_minimum": 100000,
+    "secondary_maximum": 150000,
+    "hard_minimum": 50000,
+    "hard_maximum": 150000
   },
   "liquidity": {
-    "minimum": 250000
+    "minimum_usd": 30000,
+    "preferred_usd": 50000
   },
   "volume": {
-    "minimum_24h": 500000
+    "minimum_24h_usd": 25000
   },
   "holders": {
-    "minimum": 250
+    "minimum": 100
   },
   "confidence": {
     "minimum": 85
+  },
+  "token_requirements": {
+    "blockchain": "solana",
+    "utility_required": true
+  },
+  "decision": {
+    "buy_candidate_minimum_score": 85,
+    "priority_alert_minimum_score": 95
   }
 }
