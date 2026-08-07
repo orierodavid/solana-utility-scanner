@@ -76,3 +76,12 @@ class DecisionEngine:
 
         reasons.append(f"Score {score.total:.2f} is below wait threshold {self.wait_score:.2f}")
         return DecisionResult(Decision.NO_TRADE, score.total, confidence, tuple(reasons), score)
+
+    @staticmethod
+    def is_alertable(result: DecisionResult) -> bool:
+        """Enforce the master actionable threshold at the notification boundary."""
+        return (
+            result.decision is Decision.BUY_CANDIDATE
+            and result.score >= 85.0
+            and result.confidence >= 85.0
+        )
