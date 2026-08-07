@@ -243,6 +243,8 @@ class RealEvidenceAnalyst:
 
         if not utility.verified:
             raise EvidenceFetchError("Utility evidence is not sufficiently verified")
+        if not development_verified:
+            raise EvidenceFetchError("Recent development evidence could not be verified")
         if confidence < 85.0:
             raise EvidenceFetchError(f"Evidence confidence {confidence:.2f}% is below 85%")
         if not why_now.strip():
