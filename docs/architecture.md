@@ -24,26 +24,30 @@ The strategic objective is to identify tokens with credible evidence of potentia
 ```text
 Market Discovery
        ↓
-Data Collection
+Live Data Collection
        ↓
 Hard Risk & Eligibility Filters
        ↓
-Utility Verification
+Real Evidence Verification
+       ↓
+Utility / Development / Risk Analysis
        ↓
 Market Structure Analysis
        ↓
 Momentum Analysis
        ↓
-Catalyst Analysis
+Catalyst / Timing Analysis
        ↓
 Alpha / Opportunity Scoring
        ↓
-AI Analysis
+AI Analysis (evidence-only, optional)
        ↓
 Trade Decision
        ↓
 Notification
 ```
+
+The **Real Evidence Verification** stage is mandatory for actionable live alerts. AI is not allowed to create evidence that the collector or evidence providers did not verify.
 
 ## 4. Core Modules
 
@@ -53,7 +57,7 @@ Collects current and historical market data from approved Solana data providers.
 
 Expected data includes:
 
-- Token identity and contract address
+- Token identity and exact contract/mint address
 - Market capitalization
 - Price
 - Liquidity
@@ -85,6 +89,29 @@ It checks for:
 
 A token that fails a mandatory rule is rejected regardless of its numerical score.
 
+### Real Evidence Analyst
+
+Resolves live project evidence before an actionable decision can be made.
+
+The current implementation verifies:
+
+- A reachable project website from the live token profile
+- A real product/use-case signal on the project source
+- An explicit relationship between the token symbol/mint and utility language
+- Recent GitHub activity when a project GitHub repository is supplied
+- Independent security data from the collector
+- Contract-authority and holder-concentration risk
+- Short-term timing signals from observed market data
+
+The evidence layer is deliberately conservative:
+
+- Missing security evidence fails closed.
+- Missing project evidence fails closed.
+- Unverified token utility fails closed.
+- Stale development evidence fails closed for actionable analysis.
+- Private/loopback evidence destinations are rejected.
+- No evidence is synthesized merely because a field is missing.
+
 ### Scorer
 
 Calculates the token's quantitative opportunity score from 0–100.
@@ -101,14 +128,13 @@ Primary dimensions include:
 - Holder growth
 - Buy/sell pressure
 - Development activity
-- Catalysts
+- Catalysts / timing
 - Community quality
-- Wallet / smart-money signals
 - Risk
 
 ### Analyst
 
-Uses the collected evidence and scoring output to produce a structured analysis.
+The existing AI-facing analyst receives only the verified evidence package and scoring output. It can explain the setup, but it cannot replace the real evidence stage.
 
 The analyst must answer:
 
@@ -120,7 +146,7 @@ The analyst must answer:
 6. What could invalidate the setup?
 7. Is the available evidence strong enough to justify an actionable alert?
 
-The AI must distinguish facts from assumptions and must not invent missing data.
+The AI must distinguish facts from assumptions and must not invent missing data, URLs, catalysts, wallet activity, or contract addresses.
 
 ### Decision Engine
 
@@ -136,7 +162,7 @@ The minimum actionable score is **85/100**, but a score of 85 or higher cannot o
 
 Sends qualified alerts to the configured notification channel.
 
-The first notification implementation is expected to use Telegram because it is straightforward to automate. WhatsApp can be added as a subsequent integration.
+Every actionable alert preserves the exact Solana mint address collected at the source boundary. The notification layer does not perform symbol/name lookup to reconstruct a contract address.
 
 ### Scheduler
 
@@ -195,6 +221,8 @@ The scoring model therefore evaluates:
 - Listings
 - Major releases
 - Ecosystem developments
+
+Only observed or independently verified catalyst/timing signals may contribute. Missing catalyst evidence contributes no bullish points.
 
 ### Wallet Intelligence
 
@@ -263,7 +291,7 @@ Key Risks:
 Invalidation Conditions:
 ```
 
-The alert should clearly distinguish measured data from AI interpretation.
+The alert should clearly distinguish measured data from analyst interpretation.
 
 ## 8. Safety and Integrity Rules
 
@@ -278,6 +306,8 @@ The engine must:
 - Reject obvious scams and rug-pull indicators.
 - Preserve evidence behind each recommendation.
 - Record the inputs and decision for later evaluation.
+- Preserve the exact source mint through every pipeline stage.
+- Fail closed when required evidence cannot be verified.
 
 ## 9. Future Learning Layer
 
