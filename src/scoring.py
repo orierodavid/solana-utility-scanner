@@ -97,6 +97,14 @@ class ScoringEngine:
 
     @staticmethod
     def _market_structure_score(token: TokenMarketData) -> float:
+        # Market cap defines the scanner's opportunity universe. Tokens outside
+        # $50k-$150k must receive zero market-structure points, not merely be
+        # blocked at the final decision stage. This keeps the score itself
+        # faithful to the hard gate and prevents an out-of-range token from
+        # accumulating partial points from liquidity or volume.
+        if token.market_cap_zone.value == "OUTSIDE":
+            return 0.0
+
         score = 0.0
         if token.market_cap_zone.value == "PRIMARY":
             score += 10.0
