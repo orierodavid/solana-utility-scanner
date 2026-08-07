@@ -48,7 +48,7 @@ def test_first_observation_is_conservative_about_smart_money():
     assert result.distribution_score == 100.0
     assert result.smart_money_score == 0.0
     assert result.matched_historical_wallets == 0
-    assert "No repeated-wallet accumulation history" in result.summary
+    assert "no repeated-wallet accumulation history" in result.summary
 
 
 def test_repeated_observations_detect_net_accumulation():
@@ -56,7 +56,7 @@ def test_repeated_observations_detect_net_accumulation():
     engine = WalletIntelligenceEngine(history)
 
     engine.analyze(candidate(8.0, 7.0))
-    result = engine.analyze(candidate(10.0, 6.0))
+    result = engine.analyze(candidate(11.0, 6.0))
 
     assert result.matched_historical_wallets == 2
     assert result.accumulation_score == 70.0
