@@ -1,6 +1,6 @@
 """Tests for the scanner runtime."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pytest
 
@@ -9,7 +9,12 @@ from src.runner import run_forever, run_once
 
 @dataclass
 class FakeResult:
+    """Minimal result shape required by runtime + production health telemetry."""
+
     should_notify: bool
+    pipeline: object | None = field(default_factory=object)
+    notified: bool = False
+    error: str | None = None
 
 
 class FakeRunner:
