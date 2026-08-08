@@ -29,6 +29,14 @@ jobs:
           restore-keys: |
             scanner-history-
 
+      - name: Restore outcome measurements
+        uses: actions/cache@v4
+        with:
+          path: data/outcome_measurements.jsonl
+          key: scanner-measurements-${{ github.run_id }}
+          restore-keys: |
+            scanner-measurements-
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
