@@ -7,6 +7,7 @@ Missing or unverified evidence fails closed before notification.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import logging
 import os
 from dataclasses import dataclass
@@ -95,13 +96,26 @@ class LiveScannerRunner:
             outcome_path = os.getenv("OUTCOME_STORE_PATH", "data/outcomes.jsonl")
             outcome_store = JsonlOutcomeStore(outcome_path)
         self.outcome_store = outcome_store
+        self.alert_cooldown_seconds = float(os.getenv("ALERT_COOLDOWN_SECONDS", "21600"))
+        if self.alert_cooldown_seconds < 0:
+            raise ValueError("ALERT_COOLDOWN_SECONDS must not be negative")
+
+    def _recently_notified(self, mint: str, now: datetime) -> bool:
+        if self.alert_cooldown_seconds == 0:
+            return False
+        checker = getattr(self.outcome_store, "was_recently_notified", None)
+        if not callable(checker):
+            return False
+        cutoff = now.astimezone(timezone.utc) - timedelta(seconds=self.alert_cooldown_seconds)
+        return bool(checker(mint, since=cutoff))
 
     def run_once(self) -> list[LiveRunResult]:
         """Collect candidates, evaluate them, persist outcomes, and optionally deliver alerts.
 
         Candidates with unavailable or unverifiable evidence are recorded as
-        skipped and can never reach the notification transport. Historical
-        persistence is observational only and never changes the decision.
+        skipped and can never reach the notification transport. Qualified
+        alerts are deduplicated using the persisted outcome history without
+        changing the underlying score or decision.
         """
         results: list[LiveRunResult] = []
         candidates: Sequence[CollectedToken] = self.collector.collect()
@@ -125,12 +139,16 @@ class LiveScannerRunner:
 
                 notified = False
                 if pipeline_result.alert is not None and self.transport is not None:
-                    alert = Alert(
-                        text=pipeline_result.alert.text,
-                        contract_address=pipeline_result.alert.contract_address,
-                    )
-                    self.transport.send(alert)
-                    notified = True
+                    now = datetime.now(timezone.utc)
+                    if self._recently_notified(mint, now):
+                        logger.info("Alert suppressed by cooldown for %s", mint)
+                    else:
+                        alert = Alert(
+                            text=pipeline_result.alert.text,
+                            contract_address=pipeline_result.alert.contract_address,
+                        )
+                        self.transport.send(alert)
+                        notified = True
 
                 decision = pipeline_result.decision
                 if decision.breakdown is None:
