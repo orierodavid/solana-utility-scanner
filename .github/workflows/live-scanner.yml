@@ -28,6 +28,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Restore scanner history
+        uses: actions/cache@v4
+        with:
+          path: data/outcomes.jsonl
+          key: scanner-history-${{ github.run_id }}
+          restore-keys: |
+            scanner-history-
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
