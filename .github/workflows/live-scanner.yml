@@ -1,0 +1,51 @@
+name: Live Scanner
+
+on:
+  schedule:
+    # GitHub Actions supports scheduled workflows at a minimum 5-minute interval.
+    # Offset from minute 0 to reduce top-of-hour scheduling pressure.
+    - cron: "2/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: live-scanner
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    name: Run one live scanner cycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    permissions:
+      contents: read
+    env:
+      ENABLE_TELEGRAM_ALERTS: "true"
+      OUTCOME_STORE_PATH: data/outcomes.jsonl
+      LOG_LEVEL: INFO
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run live scanner once
+        run: python -m src.runner --once
+
+      - name: Upload scan outcome record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scanner-outcomes-${{ github.run_id }}
+          path: data/outcomes.jsonl
+          if-no-files-found: ignore
+          retention-days: 30
