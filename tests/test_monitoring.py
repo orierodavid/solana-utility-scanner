@@ -18,12 +18,13 @@ class Result:
         return self.pipeline is not None and self.notified
 
 
-def test_build_health_reports_success(tmp_path):
+def test_build_health_reports_success():
     start = datetime.now(timezone.utc)
     end = start + timedelta(seconds=2)
     health = build_scan_health(start, end, [Result(notify=True), Result(notify=False)])
 
     assert health.healthy is True
+    assert health.degraded is False
     assert health.candidates == 2
     assert health.evaluated == 2
     assert health.alerts_qualified == 1
@@ -41,15 +42,21 @@ def test_health_records_are_machine_readable(tmp_path):
 
     assert path.exists()
     assert '"healthy": true' in path.read_text(encoding="utf-8")
+    assert '"degraded": false' in path.read_text(encoding="utf-8")
 
 
-def test_failed_candidate_fails_validation():
+def test_failed_candidate_degrades_but_does_not_fail_whole_scan():
     start = datetime.now(timezone.utc)
-    health = build_scan_health(start, start + timedelta(seconds=1), [Result(error="provider failed")])
+    health = build_scan_health(
+        start,
+        start + timedelta(seconds=1),
+        [Result(), Result(error="provider failed")],
+    )
 
-    assert health.healthy is False
-    with pytest.raises(RuntimeError, match="candidate\(s\) failed"):
-        validate_health(health)
+    assert health.healthy is True
+    assert health.degraded is True
+    assert health.candidates_failed == 1
+    validate_health(health)
 
 
 def test_slow_scan_fails_validation():
