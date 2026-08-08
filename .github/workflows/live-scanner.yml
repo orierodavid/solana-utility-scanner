@@ -22,7 +22,7 @@ jobs:
       HEALTH_STORE_PATH: data/scan_health.jsonl
       LOG_LEVEL: INFO
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
