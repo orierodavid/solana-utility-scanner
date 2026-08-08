@@ -1,10 +1,10 @@
-"""Tests for the continuous scanner runtime."""
+"""Tests for the scanner runtime."""
 
 from dataclasses import dataclass
 
 import pytest
 
-from src.runner import run_forever
+from src.runner import run_forever, run_once
 
 
 @dataclass
@@ -22,6 +22,16 @@ class FakeRunner:
         if self.calls >= self.cycles:
             raise StopIteration
         return [FakeResult(True), FakeResult(False)]
+
+
+def test_single_cycle_runtime_executes_once():
+    runner = FakeRunner(cycles=99)
+
+    results = run_once(runner)
+
+    assert runner.calls == 1
+    assert len(results) == 2
+    assert sum(result.should_notify for result in results) == 1
 
 
 def test_runtime_repeats_cycles_and_waits_between_them():
