@@ -1,10 +1,4 @@
-"""Continuous and single-cycle runtime for the live scanner.
-
-The runtime contains no trading logic. It can execute one complete scanner
-cycle for scheduled environments or repeat cycles for a long-lived process.
-Failures remain fail-closed at the candidate level and do not silently turn
-into alerts.
-"""
+"""Continuous and single-cycle runtime for the live scanner."""
 
 from __future__ import annotations
 
@@ -13,16 +7,25 @@ import logging
 import os
 import time
 from collections.abc import Callable
+from datetime import datetime, timezone
 
 from .live_pipeline import LiveScannerRunner
+from .monitoring import build_scan_health, validate_health, write_health_record
 
 logger = logging.getLogger("solana-utility-scanner.runtime")
 
 
 def run_once(runner: LiveScannerRunner | None = None) -> list:
-    """Execute exactly one complete live scanner cycle."""
+    """Execute exactly one complete live scanner cycle and validate its health."""
     runner = runner or LiveScannerRunner()
+    started = datetime.now(timezone.utc)
     results = runner.run_once()
+    finished = datetime.now(timezone.utc)
+    health = build_scan_health(started, finished, results)
+    health_path = os.getenv("HEALTH_STORE_PATH", "data/scan_health.jsonl")
+    write_health_record(health_path, health)
+    logger.info("Scan health: %s", health.to_dict())
+    validate_health(health)
     logger.info(
         "Scan cycle complete: candidates=%d alerts=%d",
         len(results),
@@ -59,17 +62,8 @@ def run_forever(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the Solana utility scanner")
-    parser.add_argument(
-        "--interval",
-        type=float,
-        default=None,
-        help="Seconds between scan cycles in continuous mode; defaults to SCAN_INTERVAL_SECONDS or 300",
-    )
-    parser.add_argument(
-        "--once",
-        action="store_true",
-        help="Execute exactly one scan cycle and exit",
-    )
+    parser.add_argument("--interval", type=float, default=None)
+    parser.add_argument("--once", action="store_true")
     args = parser.parse_args()
     logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 
