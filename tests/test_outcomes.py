@@ -1,10 +1,9 @@
 """Tests for historical scanner outcome recording."""
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from src.collector import CollectedToken, SecurityData
-from src.models import Decision, RiskAssessment, ScoreBreakdown, TokenMarketData
+from src.models import Decision, ScoreBreakdown, TokenMarketData
 from src.outcomes import AlertOutcomeRecord, JsonlOutcomeStore
 
 
@@ -32,7 +31,7 @@ def make_token() -> TokenMarketData:
     )
 
 
-def test_outcome_record_preserves_exact_mint_and_score_breakdown():
+def make_record(observed_at=None, notified=True):
     token = make_token()
     score = ScoreBreakdown(
         utility=18,
@@ -43,9 +42,8 @@ def test_outcome_record_preserves_exact_mint_and_score_breakdown():
         community=8,
         risk=9,
     )
-    observed = datetime(2026, 8, 8, 12, 0, tzinfo=timezone.utc)
-    record = AlertOutcomeRecord.from_decision(
-        event_id=f"{MINT}:2026-08-08T12:00:00+00:00",
+    return AlertOutcomeRecord.from_decision(
+        event_id="event-1",
         token=token,
         decision=Decision.BUY_CANDIDATE,
         score=score,
@@ -55,9 +53,14 @@ def test_outcome_record_preserves_exact_mint_and_score_breakdown():
         why_now="Verified utility and live accumulation.",
         invalidation_conditions=["Material liquidity loss"],
         wallet_intelligence_score=8.5,
-        notified=True,
-        observed_at=observed,
+        notified=notified,
+        observed_at=observed_at,
     )
+
+
+def test_outcome_record_preserves_exact_mint_and_score_breakdown():
+    observed = datetime(2026, 8, 8, 12, 0, tzinfo=timezone.utc)
+    record = make_record(observed)
 
     payload = json.loads(record.to_json())
 
@@ -72,33 +75,22 @@ def test_outcome_record_preserves_exact_mint_and_score_breakdown():
 def test_jsonl_store_appends_one_complete_record(tmp_path):
     path = tmp_path / "outcomes.jsonl"
     store = JsonlOutcomeStore(path)
-    token = make_token()
-    score = ScoreBreakdown(
-        utility=18,
-        market_structure=14,
-        momentum=19,
-        development=14,
-        catalysts=9,
-        community=8,
-        risk=9,
-    )
-    record = AlertOutcomeRecord.from_decision(
-        event_id="event-1",
-        token=token,
-        decision=Decision.BUY_CANDIDATE,
-        score=score,
-        confidence=95,
-        risk_overall=5,
-        risk_hard_filter_failed=False,
-        why_now="Verified utility and live accumulation.",
-        notified=True,
-    )
 
-    store.append(record)
+    store.append(make_record())
 
     lines = path.read_text(encoding="utf-8").splitlines()
     assert len(lines) == 1
     assert json.loads(lines[0])["contract_address"] == MINT
+
+
+def test_jsonl_store_detects_recent_notification_and_ignores_old_one(tmp_path):
+    path = tmp_path / "outcomes.jsonl"
+    store = JsonlOutcomeStore(path)
+    now = datetime.now(timezone.utc)
+    store.append(make_record(now - timedelta(minutes=5), notified=True))
+
+    assert store.was_recently_notified(MINT, since=now - timedelta(hours=1)) is True
+    assert store.was_recently_notified(MINT, since=now - timedelta(minutes=1)) is False
 
 
 def test_outcome_record_is_observational_and_supports_non_actionable_decisions():
