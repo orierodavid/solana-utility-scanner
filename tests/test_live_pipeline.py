@@ -1,6 +1,7 @@
 """Tests for the end-to-end live scanner runner."""
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from src.collector import CollectedToken, SecurityData
 from src.live_pipeline import CandidateEvidence, LiveScannerRunner
@@ -86,6 +87,17 @@ class FakeTransport:
         return {"ok": True}
 
 
+class RecentlyNotifiedStore:
+    def __init__(self):
+        self.records = []
+
+    def append(self, record):
+        self.records.append(record)
+
+    def was_recently_notified(self, contract_address, *, since: datetime):
+        return contract_address == MINT and since <= datetime.now(timezone.utc)
+
+
 def test_live_runner_sends_only_qualified_alert_with_exact_mint():
     transport = FakeTransport()
     runner = LiveScannerRunner(FakeCollector(), FakeEvidenceProvider(), transport=transport)
@@ -100,6 +112,26 @@ def test_live_runner_sends_only_qualified_alert_with_exact_mint():
     assert len(transport.alerts) == 1
     assert transport.alerts[0].contract_address == MINT
     assert f"Contract: {MINT}" in transport.alerts[0].text
+
+
+def test_live_runner_suppresses_recent_duplicate_alert():
+    transport = FakeTransport()
+    store = RecentlyNotifiedStore()
+    runner = LiveScannerRunner(
+        FakeCollector(),
+        FakeEvidenceProvider(),
+        transport=transport,
+        outcome_store=store,
+    )
+
+    results = runner.run_once()
+
+    assert results[0].pipeline is not None
+    assert results[0].pipeline.decision.decision is Decision.BUY_CANDIDATE
+    assert results[0].notified is False
+    assert transport.alerts == []
+    assert len(store.records) == 1
+    assert store.records[0].notified is False
 
 
 def test_live_runner_fail_closes_when_evidence_provider_fails():
