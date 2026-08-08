@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from src.outcome_evaluator import evaluate_outcomes
 
 
@@ -23,6 +25,6 @@ def test_measures_only_matured_horizon_and_is_idempotent(tmp_path):
 
     assert len(first) == 1
     assert first[0].horizon_hours == 1
-    assert first[0].return_pct == 20.0
+    assert first[0].return_pct == pytest.approx(20.0)
     assert second == []
     assert len(measurements.read_text(encoding="utf-8").splitlines()) == 1
