@@ -2,8 +2,6 @@ name: Live Scanner
 
 on:
   schedule:
-    # GitHub Actions supports scheduled workflows at a minimum 5-minute interval.
-    # Offset from minute 0 to reduce top-of-hour scheduling pressure.
     - cron: "2/5 * * * *"
   workflow_dispatch:
 
@@ -21,6 +19,7 @@ jobs:
     env:
       ENABLE_TELEGRAM_ALERTS: "true"
       OUTCOME_STORE_PATH: data/outcomes.jsonl
+      HEALTH_STORE_PATH: data/scan_health.jsonl
       LOG_LEVEL: INFO
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -49,11 +48,13 @@ jobs:
       - name: Run live scanner once
         run: python -m src.runner --once
 
-      - name: Upload scan outcome record
+      - name: Upload production telemetry
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: scanner-outcomes-${{ github.run_id }}
-          path: data/outcomes.jsonl
+          name: scanner-telemetry-${{ github.run_id }}
+          path: |
+            data/outcomes.jsonl
+            data/scan_health.jsonl
           if-no-files-found: ignore
           retention-days: 30
