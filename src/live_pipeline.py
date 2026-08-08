@@ -1,9 +1,8 @@
 """End-to-end live scanner orchestration.
 
-This module connects the read-only live collector to the deterministic
-validation/scoring/decision/alert pipeline and, when configured, the guarded
-Telegram transport. It is deliberately provider-neutral at the evidence
-boundary: no utility, risk, catalyst, or thesis data is invented here.
+The runner connects live collection to real evidence verification and then to
+validation, scoring, decision, historical recording, and guarded notification.
+Missing or unverified evidence fails closed before notification.
 """
 
 from __future__ import annotations
@@ -86,6 +85,10 @@ class LiveScannerRunner:
             evidence_provider = LiveEvidenceProvider()
         self.evidence_provider = evidence_provider
         self.pipeline = pipeline or DecisionAlertPipeline()
+        if transport is None and os.getenv("ENABLE_TELEGRAM_ALERTS", "").strip().lower() in {"1", "true", "yes"}:
+            from .telegram import TelegramNotifier
+
+            transport = TelegramNotifier()
         self.transport = transport
         self.wallet_engine = wallet_engine or WalletIntelligenceEngine()
         if outcome_store is None:
@@ -96,10 +99,9 @@ class LiveScannerRunner:
     def run_once(self) -> list[LiveRunResult]:
         """Collect candidates, evaluate them, persist outcomes, and optionally deliver alerts.
 
-        Any candidate whose evidence cannot be verified is fail-closed: it is
-        recorded as an error and cannot reach the notification transport.
-        Historical persistence is observational only and never changes the
-        decision or alert result.
+        Candidates with unavailable or unverifiable evidence are recorded as
+        skipped and can never reach the notification transport. Historical
+        persistence is observational only and never changes the decision.
         """
         results: list[LiveRunResult] = []
         candidates: Sequence[CollectedToken] = self.collector.collect()
