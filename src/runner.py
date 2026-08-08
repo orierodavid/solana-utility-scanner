@@ -1,9 +1,9 @@
-"""Continuous production runtime for the live scanner.
+"""Continuous and single-cycle runtime for the live scanner.
 
-The runtime intentionally contains no trading logic. It repeatedly executes
-one complete scanner cycle and waits between cycles. A failure in one cycle is
-logged and does not terminate the process, while the scanner itself remains
-fail-closed for individual candidates.
+The runtime contains no trading logic. It can execute one complete scanner
+cycle for scheduled environments or repeat cycles for a long-lived process.
+Failures remain fail-closed at the candidate level and do not silently turn
+into alerts.
 """
 
 from __future__ import annotations
@@ -17,6 +17,18 @@ from collections.abc import Callable
 from .live_pipeline import LiveScannerRunner
 
 logger = logging.getLogger("solana-utility-scanner.runtime")
+
+
+def run_once(runner: LiveScannerRunner | None = None) -> list:
+    """Execute exactly one complete live scanner cycle."""
+    runner = runner or LiveScannerRunner()
+    results = runner.run_once()
+    logger.info(
+        "Scan cycle complete: candidates=%d alerts=%d",
+        len(results),
+        sum(result.should_notify for result in results),
+    )
+    return results
 
 
 def run_forever(
@@ -37,12 +49,7 @@ def run_forever(
     while True:
         started = time.monotonic()
         try:
-            results = runner.run_once()
-            logger.info(
-                "Scan cycle complete: candidates=%d alerts=%d",
-                len(results),
-                sum(result.should_notify for result in results),
-            )
+            run_once(runner)
         except Exception:
             logger.exception("Scan cycle failed; continuing after interval")
 
@@ -51,16 +58,25 @@ def run_forever(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the Solana utility scanner continuously")
+    parser = argparse.ArgumentParser(description="Run the Solana utility scanner")
     parser.add_argument(
         "--interval",
         type=float,
         default=None,
-        help="Seconds between scan cycles; defaults to SCAN_INTERVAL_SECONDS or 300",
+        help="Seconds between scan cycles in continuous mode; defaults to SCAN_INTERVAL_SECONDS or 300",
+    )
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="Execute exactly one scan cycle and exit",
     )
     args = parser.parse_args()
     logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
-    run_forever(interval_seconds=args.interval)
+
+    if args.once:
+        run_once()
+    else:
+        run_forever(interval_seconds=args.interval)
 
 
 if __name__ == "__main__":
