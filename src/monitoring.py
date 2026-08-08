@@ -22,13 +22,19 @@ class ScanHealth:
 
     @property
     def healthy(self) -> bool:
-        return self.candidates_failed == 0 and self.duration_seconds < 240
+        # Candidate-level failures are degraded data, not a failed scan cycle.
+        return self.duration_seconds < 240
+
+    @property
+    def degraded(self) -> bool:
+        return self.candidates_failed > 0
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["started_at"] = self.started_at.isoformat()
         payload["finished_at"] = self.finished_at.isoformat()
         payload["healthy"] = self.healthy
+        payload["degraded"] = self.degraded
         return payload
 
 
@@ -55,8 +61,6 @@ def write_health_record(path: str | Path, health: ScanHealth) -> None:
 
 
 def validate_health(health: ScanHealth) -> None:
-    """Fail a production run when the scanner completed in an unhealthy state."""
-    if health.candidates_failed:
-        raise RuntimeError(f"{health.candidates_failed} candidate(s) failed during scan")
+    """Fail only when the scanner cycle itself is unhealthy."""
     if health.duration_seconds >= 240:
         raise RuntimeError("scan exceeded the four-minute production budget")
