@@ -47,14 +47,15 @@ def risk() -> RiskAssessment:
 
 
 def score(total: float) -> ScoreBreakdown:
+    remaining_risk = max(0.0, min(10.0, total - 85.0))
     return ScoreBreakdown(
         utility=20,
         market_structure=15,
-        momentum=10,
-        development=10,
-        catalysts=5,
-        community=5,
-        risk=total - 65,
+        momentum=15,
+        development=15,
+        catalysts=10,
+        community=10,
+        risk=remaining_risk,
     )
 
 
