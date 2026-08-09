@@ -29,7 +29,7 @@ class CollectorError(RuntimeError):
 class CollectorConfig:
     """Runtime settings for the read-only collector."""
 
-    min_market_cap_usd: float = 50_000.0
+    min_market_cap_usd: float = 40_000.0
     max_market_cap_usd: float = 150_000.0
     min_liquidity_usd: float = 10_000.0
     request_timeout_seconds: float = 15.0
