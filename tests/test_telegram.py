@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.notifier import Alert
+from src.notifier import Alert, telegram_payload
 from src.telegram import TelegramConfig, TelegramDeliveryError, TelegramNotifier
 
 
@@ -67,3 +67,16 @@ def test_telegram_rejection_is_not_reported_as_success():
     alert = Alert(text=f"Contract / Mint Address: {MINT}", contract_address=MINT)
     with pytest.raises(TelegramDeliveryError):
         notifier.send(alert)
+
+
+def test_telegram_payload_uses_html_for_copy_friendly_mint():
+    alert = Alert(
+        text=f"Contract / Mint Address: <code>{MINT}</code>",
+        contract_address=MINT,
+    )
+
+    payload = telegram_payload(alert)
+
+    assert payload["parse_mode"] == "HTML"
+    assert f"<code>{MINT}</code>" in payload["text"]
+    assert MINT in payload["text"]
