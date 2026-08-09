@@ -54,7 +54,7 @@ def low_risk() -> RiskAssessment:
     )
 
 
-def test_buy_candidate_creates_alert_with_exact_contract():
+def test_early_buy_creates_alert_with_exact_contract():
     result = DecisionAlertPipeline().evaluate(
         strong_token(),
         strong_utility(),
@@ -65,13 +65,13 @@ def test_buy_candidate_creates_alert_with_exact_contract():
     )
 
     assert result.validation.passed
-    assert result.decision.decision is Decision.BUY_CANDIDATE
+    assert result.decision.decision is Decision.EARLY_BUY
     assert result.decision.score == 100
     assert result.should_notify
     assert result.alert is not None
     assert result.alert.contract_address == CONTRACT
     assert f"Contract: {CONTRACT}" in result.alert.text
-    assert "Decision: BUY_CANDIDATE" in result.alert.text
+    assert "Decision: EARLY_BUY" in result.alert.text
 
 
 def test_market_cap_outside_range_cannot_alert_even_with_perfect_score():
@@ -122,11 +122,11 @@ def test_wait_never_reaches_alert_channel():
         strong_token(price_change_24h_pct=5, volume_change_24h_pct=20, holders=250),
         strong_utility(),
         RiskAssessment(
-            rug_pull_risk=40,
-            holder_concentration_risk=40,
-            contract_risk=40,
-            liquidity_risk=40,
-            creator_wallet_risk=40,
+            rug_pull_risk=8,
+            holder_concentration_risk=8,
+            contract_risk=8,
+            liquidity_risk=8,
+            creator_wallet_risk=8,
         ),
         catalyst_score=0,
         why_now="Momentum needs confirmation.",
