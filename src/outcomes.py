@@ -1,10 +1,4 @@
-"""Historical recording for scanner decisions and alert deduplication.
-
-This module deliberately records observations; it does not change scoring,
-decision thresholds, or trading rules. Outcome data is keyed by the exact
-Solana mint address and preserves the alert-time evidence needed for later
-performance analysis.
-"""
+"""Historical recording for scanner decisions, timing, and alert deduplication."""
 
 from __future__ import annotations
 
@@ -13,7 +7,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 from threading import Lock
-from typing import Any, Protocol
+from typing import Any, Mapping, Protocol
 
 from .models import Decision, ScoreBreakdown, TokenMarketData
 
@@ -50,6 +44,7 @@ class AlertOutcomeRecord:
     why_now: str
     invalidation_conditions: list[str] = field(default_factory=list)
     notified: bool = False
+    alert_type: str = "BUY"
 
     @classmethod
     def from_decision(
@@ -67,6 +62,7 @@ class AlertOutcomeRecord:
         wallet_intelligence_score: float | None = None,
         notified: bool = False,
         observed_at: datetime | None = None,
+        alert_type: str = "BUY",
     ) -> "AlertOutcomeRecord":
         return cls(
             event_id=event_id,
@@ -97,6 +93,7 @@ class AlertOutcomeRecord:
             why_now=why_now,
             invalidation_conditions=list(invalidation_conditions),
             notified=notified,
+            alert_type=alert_type,
         )
 
     def to_json(self) -> str:
@@ -107,12 +104,13 @@ class AlertOutcomeRecord:
 
 
 class OutcomeStore(Protocol):
-    """Persistence boundary for historical decision records."""
-
     def append(self, record: AlertOutcomeRecord) -> None:
         ...
 
-    def was_recently_notified(self, contract_address: str, *, since: datetime) -> bool:
+    def was_recently_notified(self, contract_address: str, *, since: datetime, alert_type: str = "BUY") -> bool:
+        ...
+
+    def latest_snapshot(self, contract_address: str) -> Mapping[str, Any] | None:
         ...
 
 
@@ -131,21 +129,37 @@ class JsonlOutcomeStore:
                 handle.write(line)
                 handle.flush()
 
-    def was_recently_notified(self, contract_address: str, *, since: datetime) -> bool:
+    def _read_payloads(self) -> list[dict[str, Any]]:
         if not self.path.exists():
-            return False
-        cutoff = since.astimezone(timezone.utc)
-        with self._lock:
+            return []
+        try:
+            lines = self.path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return []
+        payloads: list[dict[str, Any]] = []
+        for line in lines:
             try:
-                lines = self.path.read_text(encoding="utf-8").splitlines()
-            except OSError:
-                return False
-        for line in reversed(lines):
-            try:
-                payload: dict[str, Any] = json.loads(line)
+                payload = json.loads(line)
             except (TypeError, ValueError):
                 continue
+            if isinstance(payload, dict):
+                payloads.append(payload)
+        return payloads
+
+    def was_recently_notified(
+        self,
+        contract_address: str,
+        *,
+        since: datetime,
+        alert_type: str = "BUY",
+    ) -> bool:
+        cutoff = since.astimezone(timezone.utc)
+        with self._lock:
+            payloads = self._read_payloads()
+        for payload in reversed(payloads):
             if payload.get("contract_address") != contract_address or payload.get("notified") is not True:
+                continue
+            if payload.get("alert_type", "BUY") != alert_type:
                 continue
             observed = payload.get("observed_at")
             if not isinstance(observed, str):
@@ -157,12 +171,27 @@ class JsonlOutcomeStore:
             return observed_at >= cutoff
         return False
 
+    def latest_snapshot(self, contract_address: str) -> Mapping[str, Any] | None:
+        with self._lock:
+            payloads = self._read_payloads()
+        for payload in reversed(payloads):
+            if payload.get("contract_address") == contract_address:
+                return payload
+        return None
+
 
 class NullOutcomeStore:
-    """Explicit no-op store for tests or deployments without persistence."""
-
     def append(self, record: AlertOutcomeRecord) -> None:
         return None
 
-    def was_recently_notified(self, contract_address: str, *, since: datetime) -> bool:
+    def was_recently_notified(
+        self,
+        contract_address: str,
+        *,
+        since: datetime,
+        alert_type: str = "BUY",
+    ) -> bool:
         return False
+
+    def latest_snapshot(self, contract_address: str) -> Mapping[str, Any] | None:
+        return None
