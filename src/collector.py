@@ -49,8 +49,6 @@ class CollectorConfig:
 
 @dataclass(frozen=True)
 class HolderSnapshot:
-    """A source-backed wallet holding percentage at collection time."""
-
     address: str
     ownership_pct: float
     source: str = "rugcheck"
@@ -58,8 +56,6 @@ class HolderSnapshot:
 
 @dataclass(frozen=True)
 class SecurityData:
-    """Security fields collected independently from market data."""
-
     holders: int | None
     top_holder_concentration_pct: float | None
     mint_authority_active: bool | None
@@ -72,8 +68,6 @@ class SecurityData:
 
 @dataclass(frozen=True)
 class CollectedToken:
-    """A market token plus its independently sourced security data."""
-
     token: TokenMarketData
     security: SecurityData | None
     profile: Mapping[str, Any]
@@ -209,14 +203,18 @@ def _token_from_pair(pair: Mapping[str, Any], mint: str, observed_at: datetime) 
 
     txns = pair.get("txns") or {}
     h24 = txns.get("h24") or {}
+    h1 = txns.get("h1") or {}
     volume = pair.get("volume") or {}
     changes = pair.get("priceChange") or {}
     price_usd = number(pair.get("priceUsd"))
     market_cap = number(pair.get("marketCap"))
     liquidity_usd = number((pair.get("liquidity") or {}).get("usd"))
     volume_24h = number(volume.get("h24"))
+    volume_1h = number(volume.get("h1")) if volume.get("h1") is not None else None
     buy_count = int(number(h24.get("buys"))) if h24.get("buys") is not None else None
     sell_count = int(number(h24.get("sells"))) if h24.get("sells") is not None else None
+    buy_count_1h = int(number(h1.get("buys"))) if h1.get("buys") is not None else None
+    sell_count_1h = int(number(h1.get("sells"))) if h1.get("sells") is not None else None
 
     pair_created_at = pair.get("pairCreatedAt")
     token_age_hours = None
@@ -235,10 +233,15 @@ def _token_from_pair(pair: Mapping[str, Any], mint: str, observed_at: datetime) 
         market_cap_usd=market_cap,
         liquidity_usd=liquidity_usd,
         volume_24h_usd=volume_24h,
+        volume_1h_usd=volume_1h,
         price_usd=price_usd,
         buy_count_24h=buy_count,
         sell_count_24h=sell_count,
+        buy_count_1h=buy_count_1h,
+        sell_count_1h=sell_count_1h,
         price_change_24h_pct=number(changes.get("h24")) if changes.get("h24") is not None else None,
+        price_change_1h_pct=number(changes.get("h1")) if changes.get("h1") is not None else None,
+        price_change_5m_pct=number(changes.get("m5")) if changes.get("m5") is not None else None,
         token_age_hours=token_age_hours,
         observed_at=observed_at,
     )
