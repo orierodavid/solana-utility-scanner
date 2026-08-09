@@ -91,6 +91,53 @@ def test_real_evidence_provider_verifies_utility_and_development():
     assert "Contract" not in evidence.why_now
 
 
+def test_real_evidence_provider_rejects_superficial_meme_project():
+    meme_text = (
+        "Only Memes Over Finance is a memecoin and community meme built for fun and viral culture. "
+        "The meme token has a roadmap, community, social links, a platform, and an application coming soon. "
+        "Buy the token, hold the token, and join the community. This is a meme coin first and foremost. "
+    ) * 3
+    provider = LiveEvidenceProvider(web=FakeWeb(meme_text), github=FakeGitHub())
+
+    try:
+        provider.enrich(candidate())
+    except EvidenceError as exc:
+        assert "meme" in str(exc).lower() or "utility" in str(exc).lower()
+    else:
+        raise AssertionError("Provider must reject a superficial meme/speculative project")
+
+
+def test_real_evidence_provider_rejects_generic_utility_claim_without_token_function():
+    generic_text = (
+        "Test Utility is a utility platform and application. The platform has documentation and a dashboard. "
+        "The project has a roadmap, community rewards, partnerships and active development. "
+        "However, the TEST token has no documented function in the product. "
+    ) * 3
+    provider = LiveEvidenceProvider(web=FakeWeb(generic_text), github=FakeGitHub())
+
+    try:
+        provider.enrich(candidate())
+    except EvidenceError as exc:
+        assert "utility" in str(exc).lower()
+    else:
+        raise AssertionError("Provider must require an explicit functional token relationship")
+
+
+def test_real_evidence_provider_verifies_utility_and_development():
+    provider = LiveEvidenceProvider(web=FakeWeb(GOOD_TEXT), github=FakeGitHub())
+
+    evidence = provider.enrich(candidate())
+
+    assert evidence.utility.verified is True
+    assert evidence.utility.product_exists is True
+    assert evidence.utility.token_is_used_by_product is True
+    assert evidence.utility.active_development is True
+    assert evidence.utility.evidence_urls
+    assert evidence.confidence >= 85
+    assert evidence.catalyst_score > 0
+    assert "Contract" not in evidence.why_now
+
+
 def test_real_evidence_provider_fails_closed_without_utility_proof():
     weak_text = "A token community page with a price chart and social links, but no product or token utility documentation. " * 3
     provider = LiveEvidenceProvider(web=FakeWeb(weak_text), github=FakeGitHub())
