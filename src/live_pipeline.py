@@ -16,7 +16,6 @@ from .pipeline import DecisionAlertPipeline, PipelineResult
 from .timing import EarlySetupDetector
 from .wallet_intelligence import WalletIntelligenceEngine
 
-
 logger = logging.getLogger("solana-utility-scanner.live")
 
 
@@ -51,21 +50,13 @@ class LiveRunResult:
 
     @property
     def should_notify(self) -> bool:
-        return self.pipeline is not None and self.pipeline.should_notify
+        return self.notified or (self.pipeline is not None and self.pipeline.should_notify)
 
 
 class LiveScannerRunner:
     """Run live discovery while separating early timing alerts from BUY alerts."""
 
-    def __init__(
-        self,
-        collector: LiveSolanaCollector | None = None,
-        evidence_provider: EvidenceProvider | None = None,
-        pipeline: DecisionAlertPipeline | None = None,
-        transport: AlertTransport | None = None,
-        wallet_engine: WalletIntelligenceEngine | None = None,
-        outcome_store: OutcomeStore | None = None,
-    ) -> None:
+    def __init__(self, collector: LiveSolanaCollector | None = None, evidence_provider: EvidenceProvider | None = None, pipeline: DecisionAlertPipeline | None = None, transport: AlertTransport | None = None, wallet_engine: WalletIntelligenceEngine | None = None, outcome_store: OutcomeStore | None = None) -> None:
         self.collector = collector or LiveSolanaCollector()
         if evidence_provider is None:
             from .evidence import LiveEvidenceProvider
@@ -97,7 +88,6 @@ class LiveScannerRunner:
         try:
             return bool(checker(mint, since=cutoff, alert_type=alert_type))
         except TypeError:
-            # Backward-compatible custom stores from integrations/tests.
             return bool(checker(mint, since=cutoff))
 
     def _latest_snapshot(self, mint: str):
@@ -115,9 +105,7 @@ class LiveScannerRunner:
                 wallet = self.wallet_engine.analyze(candidate)
                 why_now = f"{evidence.why_now} {wallet.summary}".strip()
                 pipeline_result = self.pipeline.evaluate(
-                    candidate.token,
-                    evidence.utility,
-                    evidence.risk,
+                    candidate.token, evidence.utility, evidence.risk,
                     catalyst_score=evidence.catalyst_score,
                     confidence=evidence.confidence,
                     why_now=why_now,
@@ -131,32 +119,26 @@ class LiveScannerRunner:
 
                 if alert_payload is None and evidence.confidence is not None and evidence.confidence >= 70:
                     timing = self.timing_detector.evaluate(
-                        candidate.token,
-                        evidence.utility,
-                        evidence.risk,
+                        candidate.token, evidence.utility, evidence.risk,
                         previous=self._latest_snapshot(mint),
                         wallet_score=wallet.actionable_score,
                     )
                     if timing.qualified:
                         early_why_now = f"{why_now} Early timing signals: {'; '.join(timing.reasons)}"
                         alert_payload = self.pipeline.alert_builder.build_early_setup(
-                            candidate.token,
-                            evidence.risk,
-                            timing,
-                            why_now=early_why_now,
+                            candidate.token, evidence.risk, timing, why_now=early_why_now,
                         )
                         alert_type = "EARLY_SETUP"
 
                 if alert_payload is not None and self.transport is not None:
                     now = datetime.now(timezone.utc)
-                    cooldown = self.buy_alert_cooldown_seconds if alert_type != "EARLY_SETUP" else self.early_alert_cooldown_seconds
                     kind = alert_type or "BUY"
+                    cooldown = self.buy_alert_cooldown_seconds if kind == "BUY" else self.early_alert_cooldown_seconds
                     if self._recently_notified(mint, now, alert_type=kind, cooldown_seconds=cooldown):
                         logger.info("%s alert suppressed by cooldown for %s", kind, mint)
                         alert_payload = None
                     else:
-                        alert = Alert(text=alert_payload.text, contract_address=alert_payload.contract_address)
-                        self.transport.send(alert)
+                        self.transport.send(Alert(text=alert_payload.text, contract_address=alert_payload.contract_address))
                         notified = True
 
                 decision = pipeline_result.decision
@@ -180,13 +162,7 @@ class LiveScannerRunner:
                 )
                 self.outcome_store.append(record)
 
-                results.append(LiveRunResult(
-                    contract_address=mint,
-                    pipeline=pipeline_result,
-                    notified=notified,
-                    wallet_score=wallet.actionable_score,
-                    alert_type=alert_type,
-                ))
+                results.append(LiveRunResult(contract_address=mint, pipeline=pipeline_result, notified=notified, wallet_score=wallet.actionable_score, alert_type=alert_type))
             except Exception as exc:
                 logger.warning("Candidate %s skipped: %s", mint, exc)
                 results.append(LiveRunResult(contract_address=mint, pipeline=None, notified=False, error=str(exc)))
