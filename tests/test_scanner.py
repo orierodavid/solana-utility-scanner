@@ -43,4 +43,4 @@ def test_run_once_preserves_exact_contract_and_calculates_buy_pressure(monkeypat
     assert records[0]["contract_address"] == MINT
     assert records[0]["buy_pressure_pct"] == 60.0
     assert records[0]["price_change_24h_pct"] == 18.5
-    assert records[0]["market_cap_zone"] == "CONFIRMATION"
+    assert records[0]["market_cap_zone"] == "EARLY_BUY"
