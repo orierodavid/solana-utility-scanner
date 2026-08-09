@@ -60,7 +60,7 @@ def test_pair_is_mapped_to_token_market_data():
     assert token.sell_count_24h == 80
     assert token.price_change_24h_pct == 18.5
     assert token.volume_change_24h_pct is None
-    assert token.market_cap_zone.value == "PRIMARY"
+    assert token.market_cap_zone.value == "EARLY_BUY"
 
 
 class FakeDex:
