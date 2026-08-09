@@ -179,7 +179,7 @@ class TokenAnalysis(BaseModel):
             self.decision = Decision.NO_TRADE
         elif zone is MarketCapZone.LATE_CONFIRMATION:
             self.decision = Decision.MISSED_ENTRY
-        elif zone is MarketCapZone.EARLY_BUY and self.score.total >= 70 and self.confidence >= 70:
+        elif zone is MarketCapZone.EARLY_BUY and self.score.total >= 70 and self.confidence >= 70 and self.risk.overall_risk <= 30:
             self.decision = Decision.EARLY_BUY
         elif zone is MarketCapZone.CONFIRMATION and self.score.total >= 75 and self.confidence >= 75:
             self.decision = Decision.CONFIRMATION
