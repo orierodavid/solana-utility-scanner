@@ -1,0 +1,1 @@
+Entry timing strategy: hunt from $40K, early-buy at $40K-$75K, confirmation at $75K-$120K, missed-entry monitoring at $120K-$150K, outside above $150K.
