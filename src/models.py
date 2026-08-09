@@ -14,14 +14,18 @@ _SOLANA_BASE58 = re.compile(r"^[1-9A-HJ-NP-Za-km-z]+$")
 
 
 class Decision(str, Enum):
+    EARLY_BUY = "EARLY_BUY"
     BUY_CANDIDATE = "BUY_CANDIDATE"
+    CONFIRMATION = "CONFIRMATION"
+    MISSED_ENTRY = "MISSED_ENTRY"
     WAIT = "WAIT"
     NO_TRADE = "NO_TRADE"
 
 
 class MarketCapZone(str, Enum):
-    PRIMARY = "PRIMARY"
-    SECONDARY = "SECONDARY"
+    EARLY_BUY = "EARLY_BUY"
+    CONFIRMATION = "CONFIRMATION"
+    LATE_CONFIRMATION = "LATE_CONFIRMATION"
     OUTSIDE = "OUTSIDE"
 
 
@@ -88,10 +92,19 @@ class TokenMarketData(BaseModel):
 
     @property
     def market_cap_zone(self) -> MarketCapZone:
-        if 50_000 <= self.market_cap_usd <= 100_000:
-            return MarketCapZone.PRIMARY
-        if 100_000 < self.market_cap_usd <= 150_000:
-            return MarketCapZone.SECONDARY
+        """Classify the token by entry timing, not simply by discovery size.
+
+        $40k-$75k is the preferred early-entry window. $75k-$120k is the
+        confirmation window. $120k-$150k is retained for monitoring, but a
+        strong score there is a late/missed-entry condition rather than a new
+        buy signal. Above $150k is outside the strategy.
+        """
+        if 40_000 <= self.market_cap_usd <= 75_000:
+            return MarketCapZone.EARLY_BUY
+        if 75_000 < self.market_cap_usd <= 120_000:
+            return MarketCapZone.CONFIRMATION
+        if 120_000 < self.market_cap_usd <= 150_000:
+            return MarketCapZone.LATE_CONFIRMATION
         return MarketCapZone.OUTSIDE
 
 
@@ -168,8 +181,15 @@ class TokenAnalysis(BaseModel):
 
     @model_validator(mode="after")
     def enforce_decision_rules(self) -> "TokenAnalysis":
-        if self.token.market_cap_zone is MarketCapZone.OUTSIDE or self.risk.hard_filter_failed or not self.utility.verified:
+        zone = self.token.market_cap_zone
+        if zone is MarketCapZone.OUTSIDE or self.risk.hard_filter_failed or not self.utility.verified:
             self.decision = Decision.NO_TRADE
+        elif zone is MarketCapZone.LATE_CONFIRMATION:
+            self.decision = Decision.MISSED_ENTRY
+        elif zone is MarketCapZone.EARLY_BUY and self.score.total >= 70 and self.confidence >= 70:
+            self.decision = Decision.EARLY_BUY
+        elif zone is MarketCapZone.CONFIRMATION and self.score.total >= 75 and self.confidence >= 75:
+            self.decision = Decision.CONFIRMATION
         elif self.score.total >= 85 and self.confidence >= 85:
             self.decision = Decision.BUY_CANDIDATE
         elif self.score.total >= 75:
