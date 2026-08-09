@@ -107,11 +107,13 @@ def test_live_runner_sends_only_qualified_alert_with_exact_mint():
     assert len(results) == 1
     result = results[0]
     assert result.pipeline is not None
-    assert result.pipeline.decision.decision is Decision.BUY_CANDIDATE
+    assert result.pipeline.decision.decision is Decision.EARLY_BUY
     assert result.notified is True
+    assert result.alert_type == "EARLY_BUY"
     assert len(transport.alerts) == 1
     assert transport.alerts[0].contract_address == MINT
     assert f"Contract: {MINT}" in transport.alerts[0].text
+    assert "Decision: EARLY_BUY" in transport.alerts[0].text
 
 
 def test_live_runner_suppresses_recent_duplicate_alert():
@@ -127,7 +129,7 @@ def test_live_runner_suppresses_recent_duplicate_alert():
     results = runner.run_once()
 
     assert results[0].pipeline is not None
-    assert results[0].pipeline.decision.decision is Decision.BUY_CANDIDATE
+    assert results[0].pipeline.decision.decision is Decision.EARLY_BUY
     assert results[0].notified is False
     assert transport.alerts == []
     assert len(store.records) == 1
