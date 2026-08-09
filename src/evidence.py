@@ -25,6 +25,23 @@ PRODUCT_TERMS = (
     "app", "application", "platform", "product", "protocol", "dashboard",
     "marketplace", "mainnet", "testnet", "demo", "docs", "documentation",
 )
+# These terms require stronger evidence than generic words such as "roadmap"
+# or "community" before a project can be treated as having a real product.
+PRODUCT_STRONG_TERMS = (
+    "live product", "live platform", "live protocol", "live application",
+    "public beta", "public testnet", "mainnet", "testnet", "dashboard",
+    "documentation", "docs", "api", "sdk", "app", "application",
+    "marketplace", "protocol",
+)
+TOKEN_FUNCTION_PATTERNS = (
+    r"\b{symbol}\b.{0,100}\b(?:used|use|required|needed|pay|payment|access|stake|staking|govern|governance|redeem|redeemable|fee|fees|reward|rewards)\b",
+    r"\b(?:used|use|required|needed|pay|payment|access|stake|staking|govern|governance|redeem|redeemable|fee|fees|reward|rewards)\b.{0,100}\b{symbol}\b",
+)
+SPECULATIVE_MEME_TERMS = (
+    "meme coin", "memecoin", "meme token", "for the memes", "just for fun",
+    "community meme", "viral meme", "internet meme", "culture coin",
+    "culture token", "purely speculative", "speculation only", "no utility",
+)
 CATALYST_TERMS = (
     "launch", "launched", "release", "released", "integration", "integrated",
     "partnership", "partner", "listing", "mainnet", "testnet", "upgrade",
@@ -202,6 +219,23 @@ def _count_terms(text: str, terms: Sequence[str]) -> int:
     return sum(1 for term in terms if term in lowered)
 
 
+def _has_token_function(text: str, symbol: str) -> bool:
+    """Require explicit language connecting the token to a functional action."""
+    escaped = re.escape(symbol.lower())
+    lowered = text.lower()
+    return any(re.search(pattern.format(symbol=escaped), lowered) for pattern in TOKEN_FUNCTION_PATTERNS)
+
+
+def _has_strong_product_evidence(text: str) -> bool:
+    """Require a concrete product/protocol signal, not generic marketing copy."""
+    lowered = text.lower()
+    return _count_terms(lowered, PRODUCT_STRONG_TERMS) >= 2
+
+
+def _has_speculative_meme_signal(text: str) -> bool:
+    return _count_terms(text, SPECULATIVE_MEME_TERMS) >= 1
+
+
 def _risk_from_security(candidate: CollectedToken) -> RiskAssessment:
     security = candidate.security
     token = candidate.token
@@ -310,7 +344,11 @@ class LiveEvidenceProvider:
         ))
         utility_hits = _count_terms(combined, UTILITY_TERMS)
         product_hits = _count_terms(combined, PRODUCT_TERMS)
+        strong_product_hits = _count_terms(combined, PRODUCT_STRONG_TERMS)
         catalyst_hits = _count_terms(combined, CATALYST_TERMS)
+        token_function_verified = _has_token_function(combined, token.symbol)
+        speculative_meme = _has_speculative_meme_signal(combined)
+        strong_product = _has_strong_product_evidence(combined)
 
         github_repos: list[str] = []
         github_commits = 0
@@ -322,10 +360,20 @@ class LiveEvidenceProvider:
                 github_commits += commits
                 github_issues += issues
 
-        has_real_use_case = utility_hits >= 2 and product_hits >= 1
-        product_exists = product_hits >= 1
-        token_is_used = exact_mint_mentions >= 1 or (symbol_mentions >= 2 and utility_hits >= 3)
+        # Genuine utility is now a hard evidence gate. Generic words such as
+        # "community", "roadmap", or "platform" cannot establish token utility.
+        # The token must have an explicit functional relationship to a concrete
+        # product/protocol. Meme/speculative language is rejected unless the
+        # stronger independent utility evidence is present.
+        has_real_use_case = utility_hits >= 2 and product_hits >= 1 and strong_product
+        product_exists = strong_product
+        token_is_used = token_function_verified or (
+            exact_mint_mentions >= 1 and _count_terms(combined, ("token", "mint", "contract")) >= 1 and utility_hits >= 3
+        )
         active_development = github_commits > 0 or github_issues > 0 or (catalyst_hits >= 2)
+
+        if speculative_meme and not (has_real_use_case and product_exists and token_is_used and active_development):
+            raise EvidenceError("Project appears primarily meme/speculative and lacks independently verified token utility")
 
         if not has_real_use_case or not product_exists or not token_is_used:
             raise EvidenceError("Project utility could not be verified from source-backed evidence")
@@ -333,10 +381,10 @@ class LiveEvidenceProvider:
         risk = _risk_from_security(candidate)
         evidence_confidence = round(
             sum((
-                bool(usable), exact_mint_mentions > 0, utility_hits >= 2, product_hits >= 1,
-                active_development, candidate.security is not None,
+                bool(usable), exact_mint_mentions > 0, token_function_verified, has_real_use_case,
+                strong_product, active_development, candidate.security is not None,
                 token.top_holder_concentration_pct is not None, token.holders is not None,
-            )) / 8 * 100,
+            )) / 9 * 100,
             2,
         )
         catalyst_score = min(10.0, catalyst_hits * 1.5 + min(github_commits, 3) + min(github_issues, 2) * 0.5)
@@ -349,7 +397,8 @@ class LiveEvidenceProvider:
             evidence_urls=tuple(d.url for d in usable),
             notes=(
                 f"Verified from {len(usable)} source documents; {exact_mint_mentions} exact mint mentions; "
-                f"{utility_hits} utility terms; {len(github_repos)} linked GitHub repositories."
+                f"{utility_hits} utility terms; {strong_product_hits} strong product signals; "
+                f"explicit token function={token_function_verified}; {len(github_repos)} linked GitHub repositories."
             ),
         )
         finding = EvidenceAnalyst().analyze(
