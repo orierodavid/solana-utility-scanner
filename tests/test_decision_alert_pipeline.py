@@ -118,8 +118,9 @@ def test_unverified_utility_blocks_alert():
 
 
 def test_wait_never_reaches_alert_channel():
-    # This fixture is deliberately outside the actionable early-buy regime.
-    # It must remain WAIT regardless of the aggregate score threshold.
+    # This is deliberately a non-actionable setup. With the production
+    # decision thresholds, a score below 75 is NO_TRADE (not WAIT).
+    # The invariant under test is that neither state reaches the alert channel.
     result = DecisionAlertPipeline().evaluate(
         strong_token(
             market_cap_usd=75_001,
@@ -140,5 +141,7 @@ def test_wait_never_reaches_alert_channel():
         why_now="Momentum needs confirmation.",
     )
 
-    assert result.decision.decision is Decision.WAIT
+    assert result.decision.decision is Decision.NO_TRADE
+    assert result.decision.score == 67.0
+    assert not result.should_notify
     assert result.alert is None
