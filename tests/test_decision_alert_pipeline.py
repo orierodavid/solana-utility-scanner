@@ -118,9 +118,9 @@ def test_unverified_utility_blocks_alert():
 
 
 def test_wait_never_reaches_alert_channel():
-    # Deliberately weak momentum keeps this setup below the 70-point EARLY_BUY
-    # threshold. This test verifies that a genuinely non-actionable setup stays
-    # out of the alert channel rather than exercising the early-buy path.
+    # Deliberately weak momentum plus elevated risk keeps this setup below the
+    # EARLY_BUY threshold. This verifies that a non-actionable setup stays out
+    # of the alert channel rather than exercising the early-buy path.
     result = DecisionAlertPipeline().evaluate(
         strong_token(
             price_change_24h_pct=-11,
@@ -130,11 +130,11 @@ def test_wait_never_reaches_alert_channel():
         ),
         strong_utility(),
         RiskAssessment(
-            rug_pull_risk=8,
-            holder_concentration_risk=8,
-            contract_risk=8,
-            liquidity_risk=8,
-            creator_wallet_risk=8,
+            rug_pull_risk=10,
+            holder_concentration_risk=10,
+            contract_risk=10,
+            liquidity_risk=10,
+            creator_wallet_risk=10,
         ),
         catalyst_score=0,
         why_now="Momentum needs confirmation.",
