@@ -71,7 +71,7 @@ def make_analysis() -> TokenAnalysis:
     )
 
 
-def test_pipeline_produces_actionable_alert_with_exact_mint():
+def test_pipeline_produces_actionable_early_alert_with_exact_mint():
     token = make_token()
     utility = make_utility()
     risk = make_risk()
@@ -81,7 +81,8 @@ def test_pipeline_produces_actionable_alert_with_exact_mint():
     assert validation.passed, validation.reasons
 
     decision = DecisionEngine().decide(token, utility, risk, score, 95, validation)
-    assert decision.decision is Decision.BUY_CANDIDATE
+    assert decision.decision is Decision.EARLY_BUY
+    assert decision.actionable
 
     request = Analyst().build_request(token, utility, risk, score)
     payload = request.to_prompt_payload()
