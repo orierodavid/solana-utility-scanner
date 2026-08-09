@@ -1,4 +1,4 @@
-"""End-to-end live scanner orchestration with early-setup timing detection."""
+"""End-to-end live scanner orchestration with early-entry timing detection."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Protocol, Sequence
 
 from .collector import CollectedToken, LiveSolanaCollector
-from .models import RiskAssessment, UtilityEvidence
+from .models import Decision, RiskAssessment, UtilityEvidence
 from .notifier import Alert
 from .outcomes import AlertOutcomeRecord, JsonlOutcomeStore, OutcomeStore
 from .pipeline import DecisionAlertPipeline, PipelineResult
@@ -54,7 +54,7 @@ class LiveRunResult:
 
 
 class LiveScannerRunner:
-    """Run live discovery while separating early timing alerts from BUY alerts."""
+    """Run live discovery while separating early-entry alerts from later signals."""
 
     def __init__(self, collector: LiveSolanaCollector | None = None, evidence_provider: EvidenceProvider | None = None, pipeline: DecisionAlertPipeline | None = None, transport: AlertTransport | None = None, wallet_engine: WalletIntelligenceEngine | None = None, outcome_store: OutcomeStore | None = None) -> None:
         self.collector = collector or LiveSolanaCollector()
@@ -116,6 +116,9 @@ class LiveScannerRunner:
                 notified = False
                 alert_type: str | None = None
                 alert_payload = pipeline_result.alert
+
+                if alert_payload is not None:
+                    alert_type = "EARLY_BUY" if pipeline_result.decision.decision is Decision.EARLY_BUY else "BUY"
 
                 if alert_payload is None and evidence.confidence is not None and evidence.confidence >= 70:
                     timing = self.timing_detector.evaluate(
