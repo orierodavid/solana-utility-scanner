@@ -30,6 +30,10 @@ class TokenMarketData(BaseModel):
 
     ``address`` is the exact Solana token mint address supplied by the data
     collector. It must never be inferred from a token symbol or name.
+
+    Short-window fields are intentionally retained separately from 24h fields.
+    They are used by the timing engine to detect an accelerating setup before
+    a large 24h move has already happened.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -41,13 +45,18 @@ class TokenMarketData(BaseModel):
     market_cap_usd: float = Field(ge=0)
     liquidity_usd: float = Field(ge=0)
     volume_24h_usd: float = Field(ge=0)
+    volume_1h_usd: Optional[float] = Field(default=None, ge=0)
     price_usd: float = Field(ge=0)
     holders: Optional[int] = Field(default=None, ge=0)
     holder_growth_24h_pct: Optional[float] = None
     buy_count_24h: Optional[int] = Field(default=None, ge=0)
     sell_count_24h: Optional[int] = Field(default=None, ge=0)
+    buy_count_1h: Optional[int] = Field(default=None, ge=0)
+    sell_count_1h: Optional[int] = Field(default=None, ge=0)
     volume_change_24h_pct: Optional[float] = None
     price_change_24h_pct: Optional[float] = None
+    price_change_1h_pct: Optional[float] = None
+    price_change_5m_pct: Optional[float] = None
     token_age_hours: Optional[float] = Field(default=None, ge=0)
     top_holder_concentration_pct: Optional[float] = Field(default=None, ge=0, le=100)
     creator_holding_pct: Optional[float] = Field(default=None, ge=0, le=100)
@@ -58,9 +67,6 @@ class TokenMarketData(BaseModel):
     @field_validator("address")
     @classmethod
     def validate_solana_mint_address(cls, value: str) -> str:
-        # Solana addresses are Base58 strings and are normally 32 bytes,
-        # represented as 32–44 Base58 characters. We intentionally do not
-        # accept whitespace, symbols, URLs, or token tickers.
         if not _SOLANA_BASE58.fullmatch(value):
             raise ValueError("address must be a valid-looking Solana Base58 mint address")
         return value
@@ -76,6 +82,8 @@ class TokenMarketData(BaseModel):
     def validate_market_data(self) -> "TokenMarketData":
         if self.market_cap_usd > 0 and self.liquidity_usd > self.market_cap_usd * 10:
             raise ValueError("Liquidity is implausibly high relative to market cap")
+        if self.volume_1h_usd is not None and self.volume_1h_usd > self.volume_24h_usd * 1.05:
+            raise ValueError("1h volume cannot materially exceed 24h volume")
         return self
 
     @property
@@ -156,7 +164,6 @@ class TokenAnalysis(BaseModel):
 
     @property
     def contract_address(self) -> str:
-        """Exact verified mint address to be included in every alert."""
         return self.token.address
 
     @model_validator(mode="after")
