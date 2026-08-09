@@ -26,7 +26,8 @@ class DecisionEngine:
 
     def __init__(self, buy_score: float = 85.0, buy_confidence: float = 85.0, wait_score: float = 75.0,
                  early_buy_score: float = 70.0, early_buy_confidence: float = 70.0,
-                 confirmation_score: float = 75.0, confirmation_confidence: float = 75.0) -> None:
+                 confirmation_score: float = 75.0, confirmation_confidence: float = 75.0,
+                 early_buy_max_risk: int = 30) -> None:
         if not 0 <= wait_score <= buy_score <= 100:
             raise ValueError("Scores must satisfy 0 <= wait_score <= buy_score <= 100")
         for value, name in ((buy_confidence, "buy_confidence"), (early_buy_confidence, "early_buy_confidence"),
@@ -35,6 +36,8 @@ class DecisionEngine:
                 raise ValueError(f"{name} must be between 0 and 100")
         if not 0 <= early_buy_score <= 100 or not 0 <= confirmation_score <= 100:
             raise ValueError("Early and confirmation scores must be between 0 and 100")
+        if not 0 <= early_buy_max_risk <= 100:
+            raise ValueError("early_buy_max_risk must be between 0 and 100")
         self.buy_score = buy_score
         self.buy_confidence = buy_confidence
         self.wait_score = wait_score
@@ -42,6 +45,7 @@ class DecisionEngine:
         self.early_buy_confidence = early_buy_confidence
         self.confirmation_score = confirmation_score
         self.confirmation_confidence = confirmation_confidence
+        self.early_buy_max_risk = early_buy_max_risk
 
     def decide(self, token: TokenMarketData, utility: UtilityEvidence, risk: RiskAssessment,
                score: ScoreBreakdown, confidence: float, validation: ValidationResult) -> DecisionResult:
@@ -66,9 +70,17 @@ class DecisionEngine:
         if zone is MarketCapZone.LATE_CONFIRMATION:
             reasons.append("Token is above the preferred entry window; treat this as a missed-entry reminder, not a fresh buy")
             return DecisionResult(Decision.MISSED_ENTRY, score.total, confidence, tuple(reasons), score)
-        if zone is MarketCapZone.EARLY_BUY and score.total >= self.early_buy_score and confidence >= self.early_buy_confidence:
-            reasons.append("Token is inside the $40K-$75K early-entry zone and meets the early-buy thresholds")
-            return DecisionResult(Decision.EARLY_BUY, score.total, confidence, tuple(reasons), score)
+
+        # Early entry is deliberately stricter than the raw opportunity score.
+        # A token with elevated aggregate risk must not become actionable merely
+        # because missing/weak momentum fields still produce a high score.
+        if zone is MarketCapZone.EARLY_BUY:
+            if score.total >= self.early_buy_score and confidence >= self.early_buy_confidence and risk.overall_risk <= self.early_buy_max_risk:
+                reasons.append("Token is inside the $40K-$75K early-entry zone and meets the early-buy thresholds")
+                return DecisionResult(Decision.EARLY_BUY, score.total, confidence, tuple(reasons), score)
+            if risk.overall_risk > self.early_buy_max_risk:
+                reasons.append(f"Overall risk {risk.overall_risk} exceeds early-buy limit {self.early_buy_max_risk}")
+
         if zone is MarketCapZone.CONFIRMATION and score.total >= self.confirmation_score and confidence >= self.confirmation_confidence:
             reasons.append("Token is in the $75K-$120K confirmation zone; the early-entry window has passed")
             return DecisionResult(Decision.CONFIRMATION, score.total, confidence, tuple(reasons), score)
