@@ -25,7 +25,7 @@ def _float_env(name: str, default: float) -> float:
 def build_collector() -> LiveSolanaCollector:
     """Build a collector from safe, non-secret environment settings."""
     config = CollectorConfig(
-        min_market_cap_usd=_float_env("MIN_MARKET_CAP_USD", 50_000),
+        min_market_cap_usd=_float_env("MIN_MARKET_CAP_USD", 40_000),
         max_market_cap_usd=_float_env("MAX_MARKET_CAP_USD", 150_000),
         min_liquidity_usd=_float_env("MIN_LIQUIDITY_USD", 10_000),
         require_security_data=os.getenv("REQUIRE_SECURITY_DATA", "true").lower() == "true",
