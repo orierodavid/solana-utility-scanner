@@ -39,17 +39,14 @@ def build_alert(analysis: TokenAnalysis, decision: DecisionResult) -> Alert | No
     if not address or address != analysis.contract_address:
         raise NotificationError("Verified contract address is missing or inconsistent")
 
-    # Explicit integrity check: the address shown in the alert must be exactly
-    # the mint address carried by the validated analysis object.
-    # Telegram receives HTML parse mode, so the mint is rendered as a dedicated
-    # code span that makes the full address easy to select/copy without changing
-    # the underlying contract value.
+    # Keep the canonical Alert text provider-neutral and unformatted. Telegram
+    # applies its copy-friendly HTML presentation at the transport boundary.
     text = "\n".join(
         [
             "🚨 SOLANA UTILITY TRADE CANDIDATE",
             "",
             f"Token: {analysis.token.name} (${analysis.token.symbol})",
-            f"Contract / Mint Address: <code>{address}</code>",
+            f"Contract / Mint Address: {address}",
             f"Market Cap: ${analysis.token.market_cap_usd:,.0f}",
             f"Liquidity: ${analysis.token.liquidity_usd:,.0f}",
             f"24h Volume: ${analysis.token.volume_24h_usd:,.0f}",
@@ -81,7 +78,12 @@ def send_alert(alert: Alert, sender: Callable[[str], object]) -> object:
 
 
 def telegram_payload(alert: Alert) -> Mapping[str, str]:
-    """Return a provider-neutral Telegram-style payload."""
+    """Return a Telegram payload with the exact mint rendered copy-friendly."""
     if not alert.contract_address or alert.contract_address not in alert.text:
         raise NotificationError("Invalid alert payload")
-    return {"text": alert.text, "parse_mode": "HTML"}
+
+    contract_label = f"Contract / Mint Address: {alert.contract_address}"
+    formatted_label = f"Contract / Mint Address: <code>{alert.contract_address}</code>"
+    text = alert.text.replace(contract_label, formatted_label, 1)
+
+    return {"text": text, "parse_mode": "HTML"}
