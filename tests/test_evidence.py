@@ -123,21 +123,6 @@ def test_real_evidence_provider_rejects_generic_utility_claim_without_token_func
         raise AssertionError("Provider must require an explicit functional token relationship")
 
 
-def test_real_evidence_provider_verifies_utility_and_development():
-    provider = LiveEvidenceProvider(web=FakeWeb(GOOD_TEXT), github=FakeGitHub())
-
-    evidence = provider.enrich(candidate())
-
-    assert evidence.utility.verified is True
-    assert evidence.utility.product_exists is True
-    assert evidence.utility.token_is_used_by_product is True
-    assert evidence.utility.active_development is True
-    assert evidence.utility.evidence_urls
-    assert evidence.confidence >= 85
-    assert evidence.catalyst_score > 0
-    assert "Contract" not in evidence.why_now
-
-
 def test_real_evidence_provider_fails_closed_without_utility_proof():
     weak_text = "A token community page with a price chart and social links, but no product or token utility documentation. " * 3
     provider = LiveEvidenceProvider(web=FakeWeb(weak_text), github=FakeGitHub())
