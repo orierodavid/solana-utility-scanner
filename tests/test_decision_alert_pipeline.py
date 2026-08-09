@@ -118,11 +118,11 @@ def test_unverified_utility_blocks_alert():
 
 
 def test_wait_never_reaches_alert_channel():
-    # Deliberately weak momentum plus elevated risk keeps this setup below the
-    # EARLY_BUY threshold. This verifies that a non-actionable setup stays out
-    # of the alert channel rather than exercising the early-buy path.
+    # This fixture is deliberately outside the actionable early-buy regime.
+    # It must remain WAIT regardless of the aggregate score threshold.
     result = DecisionAlertPipeline().evaluate(
         strong_token(
+            market_cap_usd=75_001,
             price_change_24h_pct=-11,
             volume_change_24h_pct=-21,
             holders=250,
