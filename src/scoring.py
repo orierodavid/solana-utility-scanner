@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from .models import (
     Decision,
+    MarketCapZone,
     RiskAssessment,
     ScoreBreakdown,
     TokenMarketData,
@@ -73,8 +74,15 @@ class ScoringEngine:
         )
 
         confidence = self._confidence(token, utility, risk, wallet_intelligence_score)
-        if token.market_cap_zone.value == "OUTSIDE" or risk.hard_filter_failed or not utility.verified:
+        if token.market_cap_zone is MarketCapZone.OUTSIDE or risk.hard_filter_failed or not utility.verified:
             decision = Decision.NO_TRADE
+        elif token.market_cap_zone is MarketCapZone.LATE_CONFIRMATION:
+            # A high score at this level is intentionally not converted into a
+            # fresh buy signal. This zone exists to tell us that the preferred
+            # early-entry window has already passed.
+            decision = Decision.MISSED_ENTRY
+        elif token.market_cap_zone is MarketCapZone.CONFIRMATION:
+            decision = Decision.CONFIRMATION if breakdown.total >= WAIT_THRESHOLD and confidence >= WAIT_THRESHOLD else Decision.WAIT
         elif breakdown.total >= BUY_THRESHOLD and confidence >= BUY_THRESHOLD:
             decision = Decision.BUY_CANDIDATE
         elif breakdown.total >= WAIT_THRESHOLD:
@@ -100,14 +108,11 @@ class ScoringEngine:
 
     @staticmethod
     def _market_structure_score(token: TokenMarketData) -> float:
-        if token.market_cap_zone.value == "OUTSIDE":
+        zone = token.market_cap_zone
+        if zone is MarketCapZone.OUTSIDE or zone is MarketCapZone.LATE_CONFIRMATION:
             return 0.0
 
-        score = 0.0
-        if token.market_cap_zone.value == "PRIMARY":
-            score += 10.0
-        elif token.market_cap_zone.value == "SECONDARY":
-            score += 7.0
+        score = 10.0 if zone is MarketCapZone.EARLY_BUY else 7.0
 
         if token.market_cap_usd > 0:
             liquidity_ratio = token.liquidity_usd / token.market_cap_usd
@@ -216,9 +221,6 @@ class ScoringEngine:
         if wallet_intelligence_score is None:
             return round(base, 2)
 
-        # Wallet intelligence is deliberately blended into the existing
-        # 10-point community bucket, rather than creating points out of thin
-        # air. This keeps the total score exactly 100 points.
         wallet_component = max(0.0, min(wallet_intelligence_score, 10.0))
         blended = base * 0.4 + wallet_component * 0.6
         return round(min(blended, 10.0), 2)
