@@ -41,12 +41,15 @@ def build_alert(analysis: TokenAnalysis, decision: DecisionResult) -> Alert | No
 
     # Explicit integrity check: the address shown in the alert must be exactly
     # the mint address carried by the validated analysis object.
+    # Telegram receives HTML parse mode, so the mint is rendered as a dedicated
+    # code span that makes the full address easy to select/copy without changing
+    # the underlying contract value.
     text = "\n".join(
         [
             "🚨 SOLANA UTILITY TRADE CANDIDATE",
             "",
             f"Token: {analysis.token.name} (${analysis.token.symbol})",
-            f"Contract / Mint Address: {address}",
+            f"Contract / Mint Address: <code>{address}</code>",
             f"Market Cap: ${analysis.token.market_cap_usd:,.0f}",
             f"Liquidity: ${analysis.token.liquidity_usd:,.0f}",
             f"24h Volume: ${analysis.token.volume_24h_usd:,.0f}",
