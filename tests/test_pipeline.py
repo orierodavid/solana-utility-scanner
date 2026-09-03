@@ -96,7 +96,7 @@ def test_pipeline_produces_actionable_early_alert_with_exact_mint():
     assert f"Contract / Mint Address: {MINT}" in alert.text
 
 
-def test_high_potential_lane_can_alert_without_verified_utility():
+def test_high_potential_lane_can_alert_when_utility_evidence_is_unavailable():
     token = make_token()
     utility = UtilityEvidence(
         has_real_use_case=False,
@@ -108,13 +108,13 @@ def test_high_potential_lane_can_alert_without_verified_utility():
     )
     risk = make_risk()
     score = ScoreBreakdown(
-        utility=0,
-        market_structure=20,
+        utility=10,
+        market_structure=15,
         momentum=20,
-        development=10,
+        development=15,
         catalysts=10,
         community=10,
-        risk=20,
+        risk=10,
     )
     validation = TokenValidator().validate(token, utility)
     assert validation.passed, validation.reasons
@@ -137,19 +137,21 @@ def test_high_potential_lane_can_alert_without_verified_utility():
     assert MINT in alert.text
 
 
-def test_unverified_utility_cannot_use_primary_utility_alert_lane():
+def test_explicitly_unverified_utility_cannot_use_secondary_lane():
     token = make_token()
     utility = UtilityEvidence(
         has_real_use_case=False,
         product_exists=False,
         token_is_used_by_product=False,
         active_development=False,
-        evidence_urls=[],
+        evidence_urls=["https://example.com/project"],
+        notes="Project evidence exists but token utility is not verified.",
     )
     validation = TokenValidator().validate(token, utility)
     decision = DecisionEngine().decide(token, utility, make_risk(), make_score(), 95, validation)
-    assert decision.lane == "HIGH_POTENTIAL"
-    assert decision.decision is Decision.BUY_CANDIDATE
+    assert decision.lane == "UTILITY"
+    assert decision.decision is Decision.NO_TRADE
+    assert "not verified" in " ".join(decision.reasons).lower()
 
 
 def test_validator_rejects_outside_market_cap():
