@@ -1,13 +1,14 @@
 """Broader discovery layer kept separate from the trade-entry strategy."""
 from __future__ import annotations
-from datetime import datetime, timezone
-from .collector import CollectedToken, CollectorError, LiveSolanaCollector, _best_pair, _token_from_pair
-
+from datetime import datetime,timezone
+from .collector import CollectedToken,CollectorConfig,CollectorError,LiveSolanaCollector,_best_pair,_token_from_pair
 class BroadLiveSolanaCollector(LiveSolanaCollector):
-    """Discover more market candidates while leaving entry rules downstream."""
-    def collect(self) -> list[CollectedToken]:
-        limit=min(300,max(1,getattr(self.config,"max_discovery_tokens",120)))
-        feeds=[]
+    """Discover broadly; downstream decision logic still controls alerts."""
+    def __init__(self,config=None,dex=None,rugcheck=None):
+        if config is None: config=CollectorConfig(min_market_cap_usd=10_000,max_market_cap_usd=2_000_000,min_liquidity_usd=10_000)
+        super().__init__(config=config,dex=dex,rugcheck=rugcheck)
+    def collect(self)->list[CollectedToken]:
+        limit=60; feeds=[]
         for path in ("/token-profiles/latest/v1","/token-boosts/latest/v1","/token-boosts/top/v1"):
             try:
                 payload=self.dex._get_json(path)
