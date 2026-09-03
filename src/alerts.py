@@ -33,8 +33,12 @@ class AlertBuilder:
     def build(self, token: TokenMarketData, utility: UtilityEvidence, risk: RiskAssessment, result: DecisionResult, *, why_now: str, invalidation_conditions: list[str] | tuple[str, ...] = ()) -> AlertPayload:
         if result.decision is not Decision.BUY_CANDIDATE:
             raise ValueError("Only BUY_CANDIDATE decisions can produce alerts")
-        if not why_now.strip() or not utility.verified or risk.hard_filter_failed or token.market_cap_zone.value == "OUTSIDE" or result.breakdown is None:
+        if not why_now.strip() or risk.hard_filter_failed or token.market_cap_zone.value == "OUTSIDE" or result.breakdown is None:
             raise ValueError("BUY alert prerequisites failed")
+
+        is_high_potential = result.lane == "HIGH_POTENTIAL"
+        if not is_high_potential and not utility.verified:
+            raise ValueError("Utility BUY alert requires verified utility evidence")
 
         buys = token.buy_count_24h or 0
         sells = token.sell_count_24h or 0
@@ -45,8 +49,17 @@ class AlertBuilder:
         risks = risk.reasons or ["No hard risk-filter failures"]
         invalidation = list(invalidation_conditions) or ["Required setup evidence deteriorates or a mandatory risk filter fails"]
 
+        if is_high_potential:
+            title = "SOLANA HIGH-POTENTIAL ALERT"
+            lane_text = "HIGH_POTENTIAL — Utility not independently verified"
+            decision_text = "BUY_CANDIDATE (SECONDARY LANE)"
+        else:
+            title = "SOLANA UTILITY TRADE ALERT"
+            lane_text = "UTILITY — Verified utility"
+            decision_text = "BUY_CANDIDATE"
+
         text = "\n".join([
-            "SOLANA UTILITY TRADE ALERT", "",
+            title, "",
             f"Token: {token.name} (${token.symbol})",
             f"Contract: {token.address}",
             f"Market Cap: ${token.market_cap_usd:,.0f}",
@@ -55,12 +68,13 @@ class AlertBuilder:
             f"Token Age: {token.token_age_hours:.1f}h" if token.token_age_hours is not None else "Token Age: Unavailable", "",
             f"Opportunity Score: {result.score:.2f}/100",
             f"Risk Level: {self._risk_level(risk)}",
-            f"Confidence: {result.confidence:.2f}%", "",
+            f"Confidence: {result.confidence:.2f}%",
+            f"Lane: {lane_text}", "",
             f"Momentum: {result.breakdown.momentum:.2f}/20",
             f"Holder Growth: {holder_growth}",
             f"Buy/Sell Pressure: {buy_pressure_text}",
             f"Catalyst Score: {result.breakdown.catalysts:.2f}/10", "",
-            "Decision: BUY_CANDIDATE", "", f"Why Now: {why_now.strip()}", "",
+            f"Decision: {decision_text}", "", f"Why Now: {why_now.strip()}", "",
             "Key Risks:", *[f"- {reason}" for reason in risks], "",
             "Invalidation Conditions:", *[f"- {condition}" for condition in invalidation],
         ])
@@ -92,6 +106,7 @@ class AlertBuilder:
             f"Contract: {token.address}",
             f"Market Cap: ${token.market_cap_usd:,.0f}",
             f"Liquidity: ${token.liquidity_usd:,.0f}",
+            f"24h Volume: ${token.volume_24h_usd:,.0f}",
             f"Token Age: {token.token_age_hours:.1f}h" if token.token_age_hours is not None else "Token Age: Unavailable", "",
             f"Early Setup Score: {signal.score:.2f}/100",
             f"Risk Level: {self._risk_level(risk)}",
