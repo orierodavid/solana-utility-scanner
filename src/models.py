@@ -34,10 +34,11 @@ class TokenMarketData(BaseModel):
         return self
     @property
     def market_cap_zone(self)->MarketCapZone:
-        # <$100K is the early-opportunity hunting window. <$50K is the core
-        # zone, while $50K-$100K remains eligible for exceptional early setups.
-        if 0<self.market_cap_usd<100_000:return MarketCapZone.EARLY_BUY
-        if 100_000<=self.market_cap_usd<=120_000:return MarketCapZone.CONFIRMATION
+        # <$50K is the core hunting zone. $50K-$75K remains early-entry
+        # territory so exceptional opportunities such as the user's ~$55K
+        # example are preserved. $75K-$120K is confirmation territory.
+        if 0<self.market_cap_usd<=75_000:return MarketCapZone.EARLY_BUY
+        if 75_000<self.market_cap_usd<=120_000:return MarketCapZone.CONFIRMATION
         if 120_000<self.market_cap_usd<=150_000:return MarketCapZone.LATE_CONFIRMATION
         return MarketCapZone.OUTSIDE
 class UtilityEvidence(BaseModel):
@@ -65,9 +66,9 @@ class TokenAnalysis(BaseModel):
         zone=self.token.market_cap_zone
         if zone is MarketCapZone.OUTSIDE or self.risk.hard_filter_failed:self.decision=Decision.NO_TRADE
         elif zone is MarketCapZone.LATE_CONFIRMATION:self.decision=Decision.MISSED_ENTRY
+        elif self.utility.verified and self.score.total>=85 and self.confidence>=85 and self.risk.overall_risk<=30:self.decision=Decision.BUY_CANDIDATE
         elif zone is MarketCapZone.EARLY_BUY and self.utility.verified and self.score.total>=70 and self.confidence>=70 and self.risk.overall_risk<=30:self.decision=Decision.EARLY_BUY
-        elif zone is MarketCapZone.CONFIRMATION and self.score.total>=80 and self.confidence>=75 and self.risk.overall_risk<=30:self.decision=Decision.CONFIRMATION
-        elif self.score.total>=88 and self.confidence>=85 and self.risk.overall_risk<=30:self.decision=Decision.BUY_CANDIDATE
+        elif zone is MarketCapZone.CONFIRMATION and self.score.total>=75 and self.confidence>=75 and self.risk.overall_risk<=30:self.decision=Decision.CONFIRMATION
         elif self.score.total>=75:self.decision=Decision.WAIT
         else:self.decision=Decision.NO_TRADE
         return self
