@@ -1,7 +1,6 @@
 """Core data models for the Solana utility-token scanner."""
 
 from __future__ import annotations
-
 from datetime import datetime, timezone
 from enum import Enum
 import re
@@ -9,13 +8,10 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 _SOLANA_BASE58 = re.compile(r"^[1-9A-HJ-NP-Za-km-z]+$")
-
 class Decision(str, Enum):
     EARLY_BUY="EARLY_BUY"; BUY_CANDIDATE="BUY_CANDIDATE"; CONFIRMATION="CONFIRMATION"; MISSED_ENTRY="MISSED_ENTRY"; WAIT="WAIT"; NO_TRADE="NO_TRADE"
-
 class MarketCapZone(str, Enum):
     EARLY_BUY="EARLY_BUY"; CONFIRMATION="CONFIRMATION"; LATE_CONFIRMATION="LATE_CONFIRMATION"; OUTSIDE="OUTSIDE"
-
 class TokenMarketData(BaseModel):
     model_config=ConfigDict(extra="forbid")
     address:str=Field(min_length=32,max_length=44); symbol:str=Field(min_length=1,max_length=30); name:str=Field(min_length=1,max_length=120); chain:str="solana"
@@ -38,29 +34,27 @@ class TokenMarketData(BaseModel):
         return self
     @property
     def market_cap_zone(self)->MarketCapZone:
-        if 0<self.market_cap_usd<50_000:return MarketCapZone.EARLY_BUY
-        if 50_000<=self.market_cap_usd<=100_000:return MarketCapZone.CONFIRMATION
-        if 100_000<self.market_cap_usd<=150_000:return MarketCapZone.LATE_CONFIRMATION
+        # <$100K is the early-opportunity hunting window. <$50K is the core
+        # zone, while $50K-$100K remains eligible for exceptional early setups.
+        if 0<self.market_cap_usd<100_000:return MarketCapZone.EARLY_BUY
+        if 100_000<=self.market_cap_usd<=120_000:return MarketCapZone.CONFIRMATION
+        if 120_000<self.market_cap_usd<=150_000:return MarketCapZone.LATE_CONFIRMATION
         return MarketCapZone.OUTSIDE
-
 class UtilityEvidence(BaseModel):
     model_config=ConfigDict(extra="forbid")
     has_real_use_case:bool; product_exists:bool; token_is_used_by_product:bool; active_development:bool; evidence_urls:list[str]=Field(default_factory=list); notes:str=""
     @property
     def verified(self)->bool:return self.has_real_use_case and self.product_exists and self.token_is_used_by_product
-
 class RiskAssessment(BaseModel):
     model_config=ConfigDict(extra="forbid")
     rug_pull_risk:int=Field(ge=0,le=100); holder_concentration_risk:int=Field(ge=0,le=100); contract_risk:int=Field(ge=0,le=100); liquidity_risk:int=Field(ge=0,le=100); creator_wallet_risk:int=Field(ge=0,le=100); hard_filter_failed:bool=False; reasons:list[str]=Field(default_factory=list)
     @property
     def overall_risk(self)->int:return round((self.rug_pull_risk+self.holder_concentration_risk+self.contract_risk+self.liquidity_risk+self.creator_wallet_risk)/5)
-
 class ScoreBreakdown(BaseModel):
     model_config=ConfigDict(extra="forbid")
     utility:float=Field(ge=0,le=20); market_structure:float=Field(ge=0,le=15); momentum:float=Field(ge=0,le=20); development:float=Field(ge=0,le=15); catalysts:float=Field(ge=0,le=10); community:float=Field(ge=0,le=10); risk:float=Field(ge=0,le=10)
     @property
     def total(self)->float:return round(self.utility+self.market_structure+self.momentum+self.development+self.catalysts+self.community+self.risk,2)
-
 class TokenAnalysis(BaseModel):
     model_config=ConfigDict(extra="forbid")
     token:TokenMarketData; utility:UtilityEvidence; risk:RiskAssessment; score:ScoreBreakdown; confidence:float=Field(ge=0,le=100); why_now:str=Field(min_length=1); invalidation_conditions:list[str]=Field(default_factory=list); decision:Decision=Decision.NO_TRADE
