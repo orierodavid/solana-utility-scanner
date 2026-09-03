@@ -88,7 +88,7 @@ class LiveScannerRunner:
                         raise
                 wallet=self.wallet_engine.analyze(candidate); why_now=f"{evidence.why_now} {wallet.summary}".strip()
                 pr=self.pipeline.evaluate(candidate.token,evidence.utility,evidence.risk,catalyst_score=evidence.catalyst_score,confidence=evidence.confidence,why_now=why_now,invalidation_conditions=evidence.invalidation_conditions,wallet_intelligence_score=wallet.actionable_score)
-                logger.info("CANDIDATE_EVAL mint=%s symbol=%s mc=%.2f liquidity=%.2f score=%.2f confidence=%.2f risk=%s decision=%s lane=%s utility_verified=%s",mint,candidate.token.symbol,candidate.token.market_cap_usd,candidate.token.liquidity_usd,pr.score,pr.confidence,evidence.risk.overall_risk,pr.decision.decision.value,pr.decision.lane,evidence.utility.verified)
+                logger.info("CANDIDATE_EVAL mint=%s symbol=%s mc=%.2f liquidity=%.2f score=%.2f confidence=%.2f risk=%s decision=%s lane=%s utility_verified=%s",mint,candidate.token.symbol,candidate.token.market_cap_usd,candidate.token.liquidity_usd,pr.decision.score,pr.decision.confidence,evidence.risk.overall_risk,pr.decision.decision.value,pr.decision.lane,evidence.utility.verified)
                 payload=pr.alert; kind=None
                 if payload is not None: kind="EARLY_BUY" if pr.decision.decision is Decision.EARLY_BUY else "BUY"
                 if payload is None and evidence.confidence is not None and evidence.confidence>=70:
@@ -100,7 +100,7 @@ class LiveScannerRunner:
                     if not self._recently_notified(mint,now,kind or "BUY",cooldown):
                         try:
                             self.transport.send(Alert(text=payload.text,contract_address=payload.contract_address)); notified=True
-                            logger.info("ALERT_SENT mint=%s type=%s score=%.2f confidence=%.2f",mint,kind,pr.score,pr.confidence)
+                            logger.info("ALERT_SENT mint=%s type=%s score=%.2f confidence=%.2f",mint,kind,pr.decision.score,pr.decision.confidence)
                         except Exception as exc:
                             delivery_error=f"{type(exc).__name__}: {exc}"; logger.error("ALERT_DELIVERY_FAILED mint=%s type=%s error=%s",mint,kind,delivery_error)
                     else: payload=None; logger.info("ALERT_SUPPRESSED mint=%s type=%s reason=cooldown",mint,kind)
