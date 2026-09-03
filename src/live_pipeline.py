@@ -5,7 +5,7 @@ import logging,os
 from dataclasses import dataclass
 from typing import Protocol
 from .collector import CollectedToken
-from .models import Decision
+from .models import Decision, RiskAssessment, UtilityEvidence
 from .notifier import Alert
 from .outcomes import AlertOutcomeRecord,JsonlOutcomeStore
 from .pipeline import DecisionAlertPipeline,PipelineResult
@@ -47,12 +47,46 @@ class LiveScannerRunner:
         getter=getattr(self.outcome_store,"latest_snapshot",None); return getter(mint) if callable(getter) else None
     def _watch(self,candidate,reason,**extra):
         t=candidate.token; self.watchlist_store.upsert(t.address,symbol=t.symbol,name=t.name,market_cap_usd=t.market_cap_usd,liquidity_usd=t.liquidity_usd,volume_24h_usd=t.volume_24h_usd,token_age_hours=t.token_age_hours,profile=candidate.profile,rejection_reason=reason,**extra)
+    def _fallback_evidence(self,candidate,reason):
+        """Keep a candidate evaluable when project evidence is unavailable.
+
+        Missing first-party evidence is an evidence state, not a discovery failure.
+        The candidate enters the secondary high-potential lane with no fabricated
+        utility claims; normal risk and market-cap gates still apply.
+        """
+        token=candidate.token
+        security=candidate.security
+        hc=token.top_holder_concentration_pct
+        holder=70 if hc is None else 90 if hc>35 else 60 if hc>25 else 30 if hc>15 else 0
+        ratio=token.liquidity_usd/max(token.market_cap_usd,1.0)
+        liq=85 if ratio<.05 else 60 if ratio<.10 else 35 if ratio<.20 else 0
+        contract=0
+        reasons=[]
+        if hc is None: reasons.append("Top-holder concentration could not be independently verified")
+        if token.mint_authority_active is None or token.freeze_authority_active is None: contract=30; reasons.append("Token authority state is incomplete")
+        else:
+            if token.mint_authority_active: contract+=35; reasons.append("Mint authority is active")
+            if token.freeze_authority_active: contract+=45; reasons.append("Freeze authority is active")
+        rug=0; creator=0
+        if security is None: rug=80; creator=70; reasons.append("Independent security report is unavailable")
+        risk=RiskAssessment(rug_pull_risk=rug,holder_concentration_risk=holder,contract_risk=min(contract,100),liquidity_risk=liq,creator_wallet_risk=creator,hard_filter_failed=holder>=90 or liq>=85 or rug>=80 or contract>=80,reasons=tuple(dict.fromkeys(reasons)))
+        utility=UtilityEvidence(has_real_use_case=False,product_exists=False,token_is_used_by_product=False,active_development=False,evidence_urls=[],notes=f"UTILITY_UNDER_INVESTIGATION: {reason}")
+        return CandidateEvidence(utility=utility,risk=risk,why_now="First-party utility evidence is unavailable; evaluating this candidate only through the secondary high-potential lane using market, momentum and risk evidence.",confidence=None,catalyst_score=0.0,invalidation_conditions=("First-party/project evidence remains unavailable or contradicts the thesis.","Liquidity or holder concentration breaches a hard risk threshold.","Momentum or volume deteriorates enough to invalidate the current setup."))
     def run_once(self):
         results=[]
         for candidate in self.collector.collect():
             mint=candidate.token.address; was_watched=any(str(x.get("contract_address"))==mint for x in self.watchlist_store.entries())
             try:
-                evidence=self.evidence_provider.enrich(candidate); wallet=self.wallet_engine.analyze(candidate); why_now=f"{evidence.why_now} {wallet.summary}".strip()
+                try:
+                    evidence=self.evidence_provider.enrich(candidate)
+                except Exception as evidence_exc:
+                    from .evidence import EvidenceError
+                    if isinstance(evidence_exc,EvidenceError):
+                        logger.warning("Candidate %s has incomplete utility evidence; retaining for market/risk evaluation: %s",mint,evidence_exc)
+                        evidence=self._fallback_evidence(candidate,str(evidence_exc))
+                    else:
+                        raise
+                wallet=self.wallet_engine.analyze(candidate); why_now=f"{evidence.why_now} {wallet.summary}".strip()
                 pr=self.pipeline.evaluate(candidate.token,evidence.utility,evidence.risk,catalyst_score=evidence.catalyst_score,confidence=evidence.confidence,why_now=why_now,invalidation_conditions=evidence.invalidation_conditions,wallet_intelligence_score=wallet.actionable_score)
                 payload=pr.alert; kind=None
                 if payload is not None: kind="EARLY_BUY" if pr.decision.decision is Decision.EARLY_BUY else "BUY"
