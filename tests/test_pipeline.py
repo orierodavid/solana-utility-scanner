@@ -3,7 +3,8 @@
 from src.analyst import Analyst
 from src.decision import DecisionEngine
 from src.models import RiskAssessment, ScoreBreakdown, TokenAnalysis, TokenMarketData, UtilityEvidence, Decision
-from src.notifier import NotificationError, build_alert
+from src.notifier import build_alert
+from src.alerts import AlertBuilder
 from src.validator import TokenValidator
 
 
@@ -93,6 +94,62 @@ def test_pipeline_produces_actionable_early_alert_with_exact_mint():
     assert alert is not None
     assert alert.contract_address == MINT
     assert f"Contract / Mint Address: {MINT}" in alert.text
+
+
+def test_high_potential_lane_can_alert_without_verified_utility():
+    token = make_token()
+    utility = UtilityEvidence(
+        has_real_use_case=False,
+        product_exists=False,
+        token_is_used_by_product=False,
+        active_development=False,
+        evidence_urls=[],
+        notes="UTILITY_UNDER_INVESTIGATION: first-party evidence unavailable",
+    )
+    risk = make_risk()
+    score = ScoreBreakdown(
+        utility=0,
+        market_structure=20,
+        momentum=20,
+        development=10,
+        catalysts=10,
+        community=10,
+        risk=20,
+    )
+    validation = TokenValidator().validate(token, utility)
+    assert validation.passed, validation.reasons
+
+    decision = DecisionEngine().decide(token, utility, risk, score, 90, validation)
+    assert decision.lane == "HIGH_POTENTIAL"
+    assert decision.decision is Decision.BUY_CANDIDATE
+
+    alert = AlertBuilder().build(
+        token,
+        utility,
+        risk,
+        decision,
+        why_now="Strong market structure and momentum despite unavailable utility evidence.",
+        invalidation_conditions=("Utility evidence contradicts the thesis.",),
+    )
+    assert alert.contract_address == MINT
+    assert "SOLANA HIGH-POTENTIAL ALERT" in alert.text
+    assert "Utility not independently verified" in alert.text
+    assert MINT in alert.text
+
+
+def test_unverified_utility_cannot_use_primary_utility_alert_lane():
+    token = make_token()
+    utility = UtilityEvidence(
+        has_real_use_case=False,
+        product_exists=False,
+        token_is_used_by_product=False,
+        active_development=False,
+        evidence_urls=[],
+    )
+    validation = TokenValidator().validate(token, utility)
+    decision = DecisionEngine().decide(token, utility, make_risk(), make_score(), 95, validation)
+    assert decision.lane == "HIGH_POTENTIAL"
+    assert decision.decision is Decision.BUY_CANDIDATE
 
 
 def test_validator_rejects_outside_market_cap():
