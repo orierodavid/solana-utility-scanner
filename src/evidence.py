@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from html.parser import HTMLParser
 import re
 from typing import Any, Mapping, Sequence
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 import requests
 from .collector import CollectedToken
 from .models import RiskAssessment, UtilityEvidence
@@ -16,24 +16,22 @@ PRODUCT_STRONG_TERMS=("live product","live platform","live protocol","live appli
 TOKEN_FUNCTION_ACTIONS=r"(?:used|use|required|needed|pay|payment|access|stake|staking|govern|governance|redeem|redeemable|fee|fees|reward|rewards)"
 SPECULATIVE_MEME_TERMS=("meme coin","memecoin","meme token","for the memes","just for fun","community meme","viral meme","internet meme","culture coin","culture token","purely speculative","speculation only","no utility")
 CATALYST_TERMS=("launch","launched","release","released","integration","integrated","partnership","partner","listing","mainnet","testnet","upgrade","roadmap","update","version","v2","v3")
+EVIDENCE_LINK_TERMS=("docs","documentation","github","whitepaper","litepaper","paper","app","application","platform","protocol","product","api","sdk","roadmap")
 RISK_TERMS={"mint":25,"freeze":25,"authority":10,"blacklist":20,"honeypot":60,"rug":60,"scam":80,"bundled":20,"sniper":15,"concentration":20}
 
 class EvidenceError(RuntimeError): pass
 
 class _TextExtractor(HTMLParser):
-    def __init__(self): super().__init__(); self.parts=[]; self._skip=0
-    def handle_starttag(self,tag,attrs):
-        if tag.lower() in {"script","style","noscript"}: self._skip+=1
-    def handle_endtag(self,tag):
-        if tag.lower() in {"script","style","noscript"} and self._skip: self._skip-=1
+    def __init__(self): super().__init__(); self.parts=[]
+    def handle_starttag(self,tag,attrs): pass
+    def handle_endtag(self,tag): pass
     def handle_data(self,data):
-        if not self._skip:
-            text=" ".join(data.split())
-            if text:self.parts.append(text)
+        text=" ".join(data.split())
+        if text:self.parts.append(text)
 
 @dataclass(frozen=True)
 class EvidenceDocument:
-    url:str; status_code:int; text:str; fetched_at:datetime; content_type:str=""
+    url:str; status_code:int; text:str; fetched_at:datetime; content_type:str=""; links:tuple[str,...]=()
     @property
     def usable(self): return self.status_code==200 and len(self.text)>=120
 
@@ -45,10 +43,17 @@ class WebEvidenceClient:
         try:
             r=self.session.get(url,headers={"User-Agent":"solana-utility-scanner/1.0","Accept":"text/html,application/xhtml+xml"},timeout=self.timeout,allow_redirects=True)
             ct=r.headers.get("content-type","")
-            if "text/html" not in ct and "application/xhtml+xml" not in ct: text=r.text[:2000] if r.ok else ""
-            else:
-                p=_TextExtractor(); p.feed(r.text[:500000]); text=" ".join(p.parts)
-            return EvidenceDocument(r.url,r.status_code,text[:100000],datetime.now(timezone.utc),ct)
+            raw=r.text[:500000] if r.ok else ""
+            links=[]
+            if "text/html" in ct or "application/xhtml+xml" in ct:
+                p=_TextExtractor(); p.feed(raw); text=" ".join(p.parts)
+                for href,label in re.findall(r'<a[^>]+href=[\"\']([^\"\']+)[\"\'][^>]*>(.*?)</a>',raw,re.I|re.S):
+                    clean=re.sub(r"<[^>]+>"," ",label); clean=" ".join(clean.split()).lower()
+                    absolute=urljoin(r.url,href)
+                    if urlparse(absolute).scheme in {"http","https"} and (any(term in clean for term in EVIDENCE_LINK_TERMS) or any(term in absolute.lower() for term in EVIDENCE_LINK_TERMS)):
+                        links.append(absolute)
+            else: text=raw[:2000]
+            return EvidenceDocument(r.url,r.status_code,text[:100000],datetime.now(timezone.utc),ct,tuple(dict.fromkeys(links))[:12])
         except requests.RequestException:return None
 
 class GitHubEvidenceClient:
@@ -90,19 +95,14 @@ def _extract_urls(profile:Mapping[str,Any]):
     for v in candidates:
         v=v.strip()
         if v.startswith(("http://","https://")) and urlparse(v).netloc and v not in seen:seen.add(v);out.append(v)
-    return out[:6]
+    return out[:8]
 
 def _count_terms(text,terms): return sum(1 for t in terms if t in text.lower())
 
 def _has_token_function(text,symbol):
-    """Require an explicit token/function relationship in the same sentence."""
     s=re.escape(symbol.lower())
-    # Sentence-bounded matching prevents unrelated words in neighbouring
-    # sentences (for example "community rewards" followed by "TEST token")
-    # from being misclassified as token utility.
     sentences=re.split(r"(?<=[.!?])\s+|[\n\r]+",text.lower())
-    token=rf"\b{s}\b"
-    action=rf"\b{TOKEN_FUNCTION_ACTIONS}\b"
+    token=rf"\b{s}\b"; action=rf"\b{TOKEN_FUNCTION_ACTIONS}\b"
     return any((re.search(token,sent) and re.search(action,sent)) for sent in sentences)
 
 def _has_strong_product_evidence(text): return _count_terms(text,PRODUCT_STRONG_TERMS)>=2
@@ -138,18 +138,30 @@ def _risk_from_security(candidate):
     return RiskAssessment(rug_pull_risk=rug,holder_concentration_risk=holder,contract_risk=min(contract,100),liquidity_risk=liq,creator_wallet_risk=creator,hard_filter_failed=holder>=90 or liq>=85 or rug>=80 or contract>=80,reasons=tuple(dict.fromkeys(reasons)))
 
 class LiveEvidenceProvider:
-    def __init__(self,web=None,github=None,*,max_documents=4):self.web=web or WebEvidenceClient();self.github=github or GitHubEvidenceClient();self.max_documents=max(1,max_documents)
+    def __init__(self,web=None,github=None,*,max_documents=8):self.web=web or WebEvidenceClient();self.github=github or GitHubEvidenceClient();self.max_documents=max(1,max_documents)
     def enrich(self,candidate):
         from .live_pipeline import CandidateEvidence
         from .analyst import EvidenceAnalyst
-        token=candidate.token;urls=_extract_urls(candidate.profile)
-        documents=[doc for url in urls[:self.max_documents] if (doc:=self.web.fetch(url)) is not None];usable=[d for d in documents if d.usable]
+        token=candidate.token;seed_urls=_extract_urls(candidate.profile)
+        queue=list(seed_urls);seen=set();documents=[]
+        while queue and len(documents)<self.max_documents:
+            url=queue.pop(0)
+            if url in seen:continue
+            seen.add(url)
+            doc=self.web.fetch(url)
+            if doc is None:continue
+            documents.append(doc)
+            for linked in doc.links:
+                if linked not in seen and linked not in queue and len(queue)<20:queue.append(linked)
+        usable=[d for d in documents if d.usable]
         if not usable:raise EvidenceError("No usable first-party project evidence could be fetched")
         combined=" ".join(d.text for d in usable); exact=combined.lower().count(token.address.lower())
         utility_hits=_count_terms(combined,UTILITY_TERMS);product_hits=_count_terms(combined,PRODUCT_TERMS);strong_hits=_count_terms(combined,PRODUCT_STRONG_TERMS);catalyst_hits=_count_terms(combined,CATALYST_TERMS)
         token_function=_has_token_function(combined,token.symbol);meme=_has_speculative_meme_signal(combined);strong_product=_has_strong_product_evidence(combined)
         repos=[];commits=issues=0
-        for url in urls:
+        github_urls=list(seed_urls)
+        for doc in usable:github_urls.extend(doc.links)
+        for url in dict.fromkeys(github_urls):
             if "github.com/" in url.lower():
                 repo,c,i=self.github.repository_activity(url);repos.append(repo);commits+=c;issues+=i
         has_real=utility_hits>=2 and product_hits>=1 and strong_product; product_exists=strong_product
