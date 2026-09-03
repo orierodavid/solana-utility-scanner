@@ -45,6 +45,8 @@ class AlertOutcomeRecord:
     invalidation_conditions: list[str] = field(default_factory=list)
     notified: bool = False
     alert_type: str = "BUY"
+    lane: str = "UTILITY"
+    utility_verified: bool = False
 
     @classmethod
     def from_decision(
@@ -63,6 +65,8 @@ class AlertOutcomeRecord:
         notified: bool = False,
         observed_at: datetime | None = None,
         alert_type: str = "BUY",
+        lane: str = "UTILITY",
+        utility_verified: bool = False,
     ) -> "AlertOutcomeRecord":
         return cls(
             event_id=event_id,
@@ -94,6 +98,8 @@ class AlertOutcomeRecord:
             invalidation_conditions=list(invalidation_conditions),
             notified=notified,
             alert_type=alert_type,
+            lane=lane,
+            utility_verified=utility_verified,
         )
 
     def to_json(self) -> str:
@@ -104,14 +110,9 @@ class AlertOutcomeRecord:
 
 
 class OutcomeStore(Protocol):
-    def append(self, record: AlertOutcomeRecord) -> None:
-        ...
-
-    def was_recently_notified(self, contract_address: str, *, since: datetime, alert_type: str = "BUY") -> bool:
-        ...
-
-    def latest_snapshot(self, contract_address: str) -> Mapping[str, Any] | None:
-        ...
+    def append(self, record: AlertOutcomeRecord) -> None: ...
+    def was_recently_notified(self, contract_address: str, *, since: datetime, alert_type: str = "BUY") -> bool: ...
+    def latest_snapshot(self, contract_address: str) -> Mapping[str, Any] | None: ...
 
 
 class JsonlOutcomeStore:
@@ -146,13 +147,7 @@ class JsonlOutcomeStore:
                 payloads.append(payload)
         return payloads
 
-    def was_recently_notified(
-        self,
-        contract_address: str,
-        *,
-        since: datetime,
-        alert_type: str = "BUY",
-    ) -> bool:
+    def was_recently_notified(self, contract_address: str, *, since: datetime, alert_type: str = "BUY") -> bool:
         cutoff = since.astimezone(timezone.utc)
         with self._lock:
             payloads = self._read_payloads()
@@ -184,13 +179,7 @@ class NullOutcomeStore:
     def append(self, record: AlertOutcomeRecord) -> None:
         return None
 
-    def was_recently_notified(
-        self,
-        contract_address: str,
-        *,
-        since: datetime,
-        alert_type: str = "BUY",
-    ) -> bool:
+    def was_recently_notified(self, contract_address: str, *, since: datetime, alert_type: str = "BUY") -> bool:
         return False
 
     def latest_snapshot(self, contract_address: str) -> Mapping[str, Any] | None:
