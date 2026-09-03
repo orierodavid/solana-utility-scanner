@@ -29,18 +29,15 @@ class DecisionEngine:
             reasons.extend(risk.reasons or ["Hard risk filter failed"]);return DecisionResult(Decision.NO_TRADE,score.total,confidence,tuple(reasons),score,lane)
         if zone is MarketCapZone.LATE_CONFIRMATION:
             reasons.append("Token is above the preferred early-entry window");return DecisionResult(Decision.MISSED_ENTRY,score.total,confidence,tuple(reasons),score,lane)
-        if lane=="UTILITY":
-            if zone is MarketCapZone.EARLY_BUY and score.total>=self.early_buy_score and confidence>=self.early_buy_confidence and risk.overall_risk<=self.early_buy_max_risk:
-                reasons.append("Primary utility lane: early-entry thresholds met");return DecisionResult(Decision.EARLY_BUY,score.total,confidence,tuple(reasons),score,lane)
-            if zone is MarketCapZone.CONFIRMATION and score.total>=self.confirmation_score and confidence>=self.confirmation_confidence and risk.overall_risk<=self.early_buy_max_risk:
-                reasons.append("Primary utility lane: strong confirmation");return DecisionResult(Decision.CONFIRMATION,score.total,confidence,tuple(reasons),score,lane)
-            if score.total>=self.buy_score and confidence>=self.buy_confidence:
-                reasons.append("Primary utility lane: full buy threshold met");return DecisionResult(Decision.BUY_CANDIDATE,score.total,confidence,tuple(reasons),score,lane)
-        else:
-            if zone is MarketCapZone.EARLY_BUY and score.total>=self.secondary_buy_score and confidence>=self.secondary_buy_confidence and risk.overall_risk<=self.secondary_max_risk:
-                reasons.append("Secondary high-potential lane: exceptional early opportunity");return DecisionResult(Decision.EARLY_BUY,score.total,confidence,tuple(reasons),score,lane)
+        if lane=="HIGH_POTENTIAL":
             if score.total>=self.secondary_buy_score and confidence>=self.secondary_buy_confidence and risk.overall_risk<=self.secondary_max_risk:
                 reasons.append("Secondary high-potential lane: exceptional opportunity");return DecisionResult(Decision.BUY_CANDIDATE,score.total,confidence,tuple(reasons),score,lane)
+        if score.total>=self.buy_score and confidence>=self.buy_confidence and risk.overall_risk<=self.early_buy_max_risk:
+            reasons.append("Primary utility lane: full buy threshold met");return DecisionResult(Decision.BUY_CANDIDATE,score.total,confidence,tuple(reasons),score,lane)
+        if zone is MarketCapZone.EARLY_BUY and score.total>=self.early_buy_score and confidence>=self.early_buy_confidence and risk.overall_risk<=self.early_buy_max_risk:
+            reasons.append("Primary utility lane: early-entry thresholds met");return DecisionResult(Decision.EARLY_BUY,score.total,confidence,tuple(reasons),score,lane)
+        if zone is MarketCapZone.CONFIRMATION and score.total>=self.confirmation_score and confidence>=self.confirmation_confidence and risk.overall_risk<=self.early_buy_max_risk:
+            reasons.append("Primary utility lane: strong confirmation");return DecisionResult(Decision.CONFIRMATION,score.total,confidence,tuple(reasons),score,lane)
         if score.total>=self.wait_score:
             reasons.append(f"Score {score.total:.2f} is below the actionable threshold for the {lane} lane");return DecisionResult(Decision.WAIT,score.total,confidence,tuple(reasons),score,lane)
         reasons.append(f"Score {score.total:.2f} is below wait threshold {self.wait_score:.2f}");return DecisionResult(Decision.NO_TRADE,score.total,confidence,tuple(reasons),score,lane)
