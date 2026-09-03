@@ -21,7 +21,12 @@ class ValidationResult:
 
 
 class TokenValidator:
-    """Apply mandatory eligibility and data-quality rules."""
+    """Apply mandatory eligibility and data-quality rules.
+
+    Utility verification is not a hard validation failure. TRUTH has a
+    secondary HIGH_POTENTIAL lane, so an evidence outage must not prevent a
+    candidate from reaching market and risk analysis.
+    """
 
     def __init__(
         self,
@@ -87,9 +92,8 @@ class TokenValidator:
                 f"maximum {self.max_creator_holding_pct:.1f}%"
             )
 
-        if utility is not None and not utility.verified:
-            reasons.append("Utility verification failed")
-
+        # Utility evidence is handled as a lane/evidence state by the decision
+        # engine. Never fabricate utility; simply do not hard-drop the token.
         return ValidationResult(passed=not reasons, reasons=tuple(reasons))
 
 
