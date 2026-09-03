@@ -32,10 +32,14 @@ class DecisionEngine:
         if lane=="HIGH_POTENTIAL":
             if score.total>=self.secondary_buy_score and confidence>=self.secondary_buy_confidence and risk.overall_risk<=self.secondary_max_risk:
                 reasons.append("Secondary high-potential lane: exceptional opportunity");return DecisionResult(Decision.BUY_CANDIDATE,score.total,confidence,tuple(reasons),score,lane)
-        if score.total>=self.buy_score and confidence>=self.buy_confidence and risk.overall_risk<=self.early_buy_max_risk:
-            reasons.append("Primary utility lane: full buy threshold met");return DecisionResult(Decision.BUY_CANDIDATE,score.total,confidence,tuple(reasons),score,lane)
+        # In the core early-entry zone, classify qualifying opportunities as
+        # EARLY_BUY even when they also exceed the full-buy score threshold.
+        # BUY_CANDIDATE is reserved for strong utility candidates after the
+        # early window, preventing the stronger label from masking early entry.
         if zone is MarketCapZone.EARLY_BUY and score.total>=self.early_buy_score and confidence>=self.early_buy_confidence and risk.overall_risk<=self.early_buy_max_risk:
             reasons.append("Primary utility lane: early-entry thresholds met");return DecisionResult(Decision.EARLY_BUY,score.total,confidence,tuple(reasons),score,lane)
+        if zone is MarketCapZone.CONFIRMATION and score.total>=self.buy_score and confidence>=self.buy_confidence and risk.overall_risk<=self.early_buy_max_risk:
+            reasons.append("Primary utility lane: full buy threshold met");return DecisionResult(Decision.BUY_CANDIDATE,score.total,confidence,tuple(reasons),score,lane)
         if zone is MarketCapZone.CONFIRMATION and score.total>=self.confirmation_score and confidence>=self.confirmation_confidence and risk.overall_risk<=self.early_buy_max_risk:
             reasons.append("Primary utility lane: strong confirmation");return DecisionResult(Decision.CONFIRMATION,score.total,confidence,tuple(reasons),score,lane)
         if score.total>=self.wait_score:
