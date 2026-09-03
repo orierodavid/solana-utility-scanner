@@ -1,12 +1,13 @@
-"""Deterministic two-lane opportunity scoring for the Solana scanner.
+"""Deterministic two-lane opportunity scoring for TRUTH.
 
 Utility is the primary thesis. A secondary high-potential lane can qualify a
-non-utility token when market, momentum, catalysts, community and risk evidence
-are unusually strong. No lane places trades.
+non-utility token when market, momentum, catalyst/community and risk evidence
+are unusually strong. Market cap is a priority signal, not an absolute $50K
+cutoff, so exceptional early opportunities above $50K are not discarded.
 """
 from __future__ import annotations
 from dataclasses import dataclass
-from .models import Decision,MarketCapZone,RiskAssessment,ScoreBreakdown,TokenMarketData,UtilityEvidence
+from .models import Decision, MarketCapZone, RiskAssessment, ScoreBreakdown, TokenMarketData, UtilityEvidence
 
 BUY_THRESHOLD=85.0
 WAIT_THRESHOLD=75.0
