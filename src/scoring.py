@@ -34,12 +34,13 @@ class ScoringEngine:
             decision=Decision.MISSED_ENTRY
         elif lane=="HIGH_POTENTIAL" and breakdown.total>=SECONDARY_BUY_THRESHOLD and confidence>=80 and risk.overall_risk<=25:
             decision=Decision.BUY_CANDIDATE
-        # In the core hunting zone, EARLY_BUY takes precedence over the
-        # generic full-buy score so the decision retains its early-entry meaning.
+        # A genuinely strong utility candidate keeps the stronger BUY_CANDIDATE
+        # classification even in the early zone. EARLY_BUY is the lower
+        # actionable tier for early opportunities that clear the 70/70 gate.
+        elif lane=="UTILITY" and breakdown.total>=BUY_THRESHOLD and confidence>=BUY_THRESHOLD and risk.overall_risk<=30:
+            decision=Decision.BUY_CANDIDATE
         elif lane=="UTILITY" and token.market_cap_zone is MarketCapZone.EARLY_BUY and breakdown.total>=70 and confidence>=70 and risk.overall_risk<=30:
             decision=Decision.EARLY_BUY
-        elif lane=="UTILITY" and token.market_cap_zone is MarketCapZone.CONFIRMATION and breakdown.total>=BUY_THRESHOLD and confidence>=BUY_THRESHOLD and risk.overall_risk<=30:
-            decision=Decision.BUY_CANDIDATE
         elif lane=="UTILITY" and token.market_cap_zone is MarketCapZone.CONFIRMATION and breakdown.total>=WAIT_THRESHOLD and confidence>=75 and risk.overall_risk<=30:
             decision=Decision.CONFIRMATION
         elif breakdown.total>=WAIT_THRESHOLD:
