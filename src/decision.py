@@ -32,13 +32,14 @@ class DecisionEngine:
         if lane=="HIGH_POTENTIAL":
             if score.total>=self.secondary_buy_score and confidence>=self.secondary_buy_confidence and risk.overall_risk<=self.secondary_max_risk:
                 reasons.append("Secondary high-potential lane: exceptional opportunity");return DecisionResult(Decision.BUY_CANDIDATE,score.total,confidence,tuple(reasons),score,lane)
-        # Strong utility candidates keep BUY_CANDIDATE precedence even in the
-        # early zone. EARLY_BUY remains the actionable tier for 70/70+ setups
-        # that are not yet strong enough for the full-buy threshold.
-        if score.total>=self.buy_score and confidence>=self.buy_confidence and risk.overall_risk<=self.early_buy_max_risk:
-            reasons.append("Primary utility lane: full buy threshold met");return DecisionResult(Decision.BUY_CANDIDATE,score.total,confidence,tuple(reasons),score,lane)
+        # Final decision is market-cap aware: any qualifying utility token in
+        # the early-entry zone remains EARLY_BUY, even if its raw score is 85+.
+        # Scoring may record the stronger raw BUY_CANDIDATE classification,
+        # but the final pipeline label must preserve early-entry semantics.
         if zone is MarketCapZone.EARLY_BUY and score.total>=self.early_buy_score and confidence>=self.early_buy_confidence and risk.overall_risk<=self.early_buy_max_risk:
             reasons.append("Primary utility lane: early-entry thresholds met");return DecisionResult(Decision.EARLY_BUY,score.total,confidence,tuple(reasons),score,lane)
+        if zone is MarketCapZone.CONFIRMATION and score.total>=self.buy_score and confidence>=self.buy_confidence and risk.overall_risk<=self.early_buy_max_risk:
+            reasons.append("Primary utility lane: full buy threshold met");return DecisionResult(Decision.BUY_CANDIDATE,score.total,confidence,tuple(reasons),score,lane)
         if zone is MarketCapZone.CONFIRMATION and score.total>=self.confirmation_score and confidence>=self.confirmation_confidence and risk.overall_risk<=self.early_buy_max_risk:
             reasons.append("Primary utility lane: strong confirmation");return DecisionResult(Decision.CONFIRMATION,score.total,confidence,tuple(reasons),score,lane)
         if score.total>=self.wait_score:
