@@ -2,7 +2,9 @@ name: Live Scanner
 
 on:
   schedule:
-    - cron: "3/5 * * * *"
+    # 30-minute cadence keeps GitHub Actions usage predictable while the
+    # scanner itself remains capable of running continuously on a host.
+    - cron: "3,33 * * * *"
   workflow_dispatch:
 
 concurrency:
@@ -20,34 +22,31 @@ jobs:
       ENABLE_TELEGRAM_ALERTS: "true"
       OUTCOME_STORE_PATH: data/outcomes.jsonl
       HEALTH_STORE_PATH: data/scan_health.jsonl
+      WATCHLIST_STORE_PATH: data/watchlist.json
       LOG_LEVEL: INFO
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-
       - name: Restore scanner history
         uses: actions/cache@v4
         with:
-          path: data/outcomes.jsonl
+          path: |
+            data/outcomes.jsonl
+            data/watchlist.json
           key: scanner-history-${{ github.run_id }}
           restore-keys: |
             scanner-history-
-
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-
+          cache: pip
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-
+        run: python -m pip install -r requirements.txt
       - name: Run live scanner once
         run: python -m src.runner --once
-
       - name: Upload production telemetry
         if: always()
         uses: actions/upload-artifact@v4
@@ -56,5 +55,6 @@ jobs:
           path: |
             data/outcomes.jsonl
             data/scan_health.jsonl
+            data/watchlist.json
           if-no-files-found: ignore
-          retention-days: 30
+          retention-days: 14

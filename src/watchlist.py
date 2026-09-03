@@ -14,6 +14,11 @@ class WatchlistStore:
         try:
             data=json.loads(self.path.read_text(encoding="utf-8")); return data if isinstance(data,dict) else {}
         except (OSError,ValueError): return {}
+    def entries(self)->list[dict[str,Any]]:
+        """Return monitored candidates for re-evaluation on every scan cycle."""
+        with self._lock:
+            data=self._load()
+        return [dict(value) for value in data.values() if isinstance(value,dict) and value.get("contract_address")]
     def upsert(self,contract_address:str,**fields:Any)->None:
         with self._lock:
             data=self._load(); old=data.get(contract_address,{})
