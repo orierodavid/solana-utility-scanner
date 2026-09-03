@@ -32,14 +32,14 @@ class ScoringEngine:
             decision=Decision.NO_TRADE
         elif token.market_cap_zone is MarketCapZone.LATE_CONFIRMATION:
             decision=Decision.MISSED_ENTRY
+        elif lane=="HIGH_POTENTIAL" and breakdown.total>=SECONDARY_BUY_THRESHOLD and confidence>=80 and risk.overall_risk<=25:
+            decision=Decision.BUY_CANDIDATE
+        elif lane=="UTILITY" and breakdown.total>=BUY_THRESHOLD and confidence>=BUY_THRESHOLD and risk.overall_risk<=30:
+            decision=Decision.BUY_CANDIDATE
         elif lane=="UTILITY" and token.market_cap_zone is MarketCapZone.EARLY_BUY and breakdown.total>=70 and confidence>=70 and risk.overall_risk<=30:
             decision=Decision.EARLY_BUY
         elif lane=="UTILITY" and token.market_cap_zone is MarketCapZone.CONFIRMATION and breakdown.total>=WAIT_THRESHOLD and confidence>=75 and risk.overall_risk<=30:
             decision=Decision.CONFIRMATION
-        elif lane=="HIGH_POTENTIAL" and breakdown.total>=SECONDARY_BUY_THRESHOLD and confidence>=80 and risk.overall_risk<=25:
-            decision=Decision.BUY_CANDIDATE
-        elif lane=="UTILITY" and breakdown.total>=BUY_THRESHOLD and confidence>=BUY_THRESHOLD:
-            decision=Decision.BUY_CANDIDATE
         elif breakdown.total>=WAIT_THRESHOLD:
             decision=Decision.WAIT
         else:
