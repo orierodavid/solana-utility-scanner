@@ -19,7 +19,15 @@ class DecisionEngine:
     def __init__(self,buy_score:float=85.0,buy_confidence:float=85.0,wait_score:float=75.0,early_buy_score:float=70.0,early_buy_confidence:float=70.0,confirmation_score:float=75.0,confirmation_confidence:float=75.0,early_buy_max_risk:int=30,secondary_buy_score:float=88.0,secondary_buy_confidence:float=80.0,secondary_max_risk:int=25)->None:
         self.buy_score=buy_score;self.buy_confidence=buy_confidence;self.wait_score=wait_score;self.early_buy_score=early_buy_score;self.early_buy_confidence=early_buy_confidence;self.confirmation_score=confirmation_score;self.confirmation_confidence=confirmation_confidence;self.early_buy_max_risk=early_buy_max_risk;self.secondary_buy_score=secondary_buy_score;self.secondary_buy_confidence=secondary_buy_confidence;self.secondary_max_risk=secondary_max_risk
     def decide(self,token:TokenMarketData,utility:UtilityEvidence,risk:RiskAssessment,score:ScoreBreakdown,confidence:float,validation:ValidationResult)->DecisionResult:
-        reasons:list[str]=[];lane="UTILITY" if utility.verified else "HIGH_POTENTIAL"
+        reasons:list[str]=[]
+        evidence_unavailable=(not utility.evidence_urls) and utility.notes.startswith("UTILITY_UNDER_INVESTIGATION:")
+        if utility.verified:
+            lane="UTILITY"
+        elif evidence_unavailable:
+            lane="HIGH_POTENTIAL"
+        else:
+            lane="UTILITY"
+            reasons.append("Utility evidence is present but not verified")
         if not validation.passed:
             reasons.extend(validation.reasons);return DecisionResult(Decision.NO_TRADE,score.total,confidence,tuple(reasons),score,lane)
         zone=token.market_cap_zone
@@ -29,13 +37,11 @@ class DecisionEngine:
             reasons.extend(risk.reasons or ["Hard risk filter failed"]);return DecisionResult(Decision.NO_TRADE,score.total,confidence,tuple(reasons),score,lane)
         if zone is MarketCapZone.LATE_CONFIRMATION:
             reasons.append("Token is above the preferred early-entry window");return DecisionResult(Decision.MISSED_ENTRY,score.total,confidence,tuple(reasons),score,lane)
+        if not utility.verified and not evidence_unavailable:
+            return DecisionResult(Decision.NO_TRADE,score.total,confidence,tuple(reasons),score,lane)
         if lane=="HIGH_POTENTIAL":
             if score.total>=self.secondary_buy_score and confidence>=self.secondary_buy_confidence and risk.overall_risk<=self.secondary_max_risk:
                 reasons.append("Secondary high-potential lane: exceptional opportunity");return DecisionResult(Decision.BUY_CANDIDATE,score.total,confidence,tuple(reasons),score,lane)
-        # Final decision is market-cap aware: any qualifying utility token in
-        # the early-entry zone remains EARLY_BUY, even if its raw score is 85+.
-        # Scoring may record the stronger raw BUY_CANDIDATE classification,
-        # but the final pipeline label must preserve early-entry semantics.
         if zone is MarketCapZone.EARLY_BUY and score.total>=self.early_buy_score and confidence>=self.early_buy_confidence and risk.overall_risk<=self.early_buy_max_risk:
             reasons.append("Primary utility lane: early-entry thresholds met");return DecisionResult(Decision.EARLY_BUY,score.total,confidence,tuple(reasons),score,lane)
         if zone is MarketCapZone.CONFIRMATION and score.total>=self.buy_score and confidence>=self.buy_confidence and risk.overall_risk<=self.early_buy_max_risk:
