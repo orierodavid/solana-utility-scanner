@@ -30,15 +30,7 @@ class MarketCapZone(str, Enum):
 
 
 class TokenMarketData(BaseModel):
-    """Observed/collected data for one Solana token.
-
-    ``address`` is the exact Solana token mint address supplied by the data
-    collector. It must never be inferred from a token symbol or name.
-
-    Short-window fields are intentionally retained separately from 24h fields.
-    They are used by the timing engine to detect an accelerating setup before
-    a large 24h move has already happened.
-    """
+    """Observed/collected data for one Solana token."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -92,11 +84,14 @@ class TokenMarketData(BaseModel):
 
     @property
     def market_cap_zone(self) -> MarketCapZone:
-        if 40_000 <= self.market_cap_usd <= 75_000:
+        # Primary hunting zone: below $50K. The $50K-$100K band is retained
+        # for exceptional early opportunities, including the historical
+        # ~$55K candidate that subsequently ran into the millions.
+        if 0 < self.market_cap_usd < 50_000:
             return MarketCapZone.EARLY_BUY
-        if 75_000 < self.market_cap_usd <= 120_000:
+        if 50_000 <= self.market_cap_usd <= 100_000:
             return MarketCapZone.CONFIRMATION
-        if 120_000 < self.market_cap_usd <= 150_000:
+        if 100_000 < self.market_cap_usd <= 150_000:
             return MarketCapZone.LATE_CONFIRMATION
         return MarketCapZone.OUTSIDE
 
@@ -175,15 +170,15 @@ class TokenAnalysis(BaseModel):
     @model_validator(mode="after")
     def enforce_decision_rules(self) -> "TokenAnalysis":
         zone = self.token.market_cap_zone
-        if zone is MarketCapZone.OUTSIDE or self.risk.hard_filter_failed or not self.utility.verified:
+        if zone is MarketCapZone.OUTSIDE or self.risk.hard_filter_failed:
             self.decision = Decision.NO_TRADE
         elif zone is MarketCapZone.LATE_CONFIRMATION:
             self.decision = Decision.MISSED_ENTRY
-        elif zone is MarketCapZone.EARLY_BUY and self.score.total >= 70 and self.confidence >= 70 and self.risk.overall_risk <= 30:
+        elif zone is MarketCapZone.EARLY_BUY and self.utility.verified and self.score.total >= 70 and self.confidence >= 70 and self.risk.overall_risk <= 30:
             self.decision = Decision.EARLY_BUY
-        elif zone is MarketCapZone.CONFIRMATION and self.score.total >= 75 and self.confidence >= 75:
+        elif zone is MarketCapZone.CONFIRMATION and self.score.total >= 80 and self.confidence >= 75 and self.risk.overall_risk <= 30:
             self.decision = Decision.CONFIRMATION
-        elif self.score.total >= 85 and self.confidence >= 85:
+        elif self.score.total >= 88 and self.confidence >= 85 and self.risk.overall_risk <= 30:
             self.decision = Decision.BUY_CANDIDATE
         elif self.score.total >= 75:
             self.decision = Decision.WAIT
